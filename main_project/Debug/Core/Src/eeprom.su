@@ -1,0 +1,13 @@
+eeprom.c:19:6:format_to_hex	24	static
+eeprom.c:26:6:create_sensor_info	24	static
+eeprom.c:39:6:send_to_eeprom_byte_by_byte	128	static
+eeprom.c:53:6:read_from_eeprom_single_byte	64	static
+eeprom.c:62:8:read_from_eeprom_byte_by_byte	40	static
+eeprom.c:78:6:send_to_eeprom_start_and_end_markers	120	static
+eeprom.c:97:6:write_sensor_info_to_eeprom	104	static
+eeprom.c:115:6:zero_eeprom_useful_mem	216	static
+eeprom.c:128:8:check_eeprom_data	16	static
+eeprom.c:144:6:add_end_chars_to_sensor_info	16	static
+eeprom.c:158:8:read_sensor_data_from_eeprom	16	static
+eeprom.c:206:6:sensor_info_init	16	static
+eeprom.c:218:6:show_read_sensor_data	280	static
