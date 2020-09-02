@@ -1,0 +1,12 @@
+main.c:123:5:main	192	static
+main.c:180:6:SystemClock_Config	184	static
+main.c:245:13:MX_I2C1_Init	8	static
+main.c:291:13:MX_USART2_UART_Init	8	static
+main.c:326:13:MX_GPIO_Init	40	static
+main.c:348:6:format_to_hex	24	static
+main.c:355:6:create_sensor_info	24	static
+main.c:368:6:send_to_eeprom_byte_by_byte	128	static
+main.c:382:6:send_to_eeprom_begin_and_end_markers	120	static
+main.c:401:6:write_sensor_info_to_eeprom	104	static
+main.c:470:6:zero_eeprom_useful_mem	216	static
+main.c:488:6:Error_Handler	4	static
