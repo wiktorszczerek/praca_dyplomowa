@@ -78,8 +78,8 @@ static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
-void signal_error_with_eeprom();
 void signal_error(ERRORS err);
+ERRORS check_if_threshold_level_exceeded();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,7 +103,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -129,6 +129,7 @@ int main(void)
 
   HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
   char* buffer = NULL;
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -139,7 +140,15 @@ int main(void)
 	  {
 		  buffer = (char*)malloc(100*sizeof(char));
 		  while(!filter_done){}
-		  sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
+		  //sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
+		  //HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  if((last_error = check_if_threshold_level_exceeded()) != OK)
+		  {
+			  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
+		  	  last_error = OK; //erasing the error, after it was caught
+		  }
+		  else
+			  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
 		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
 		  /*#ifdef DEBUG_MODE
 		  HAL_UART_Transmit(&huart2, (uint8_t*)"\n", strlen("\n"), 10);
@@ -148,8 +157,9 @@ int main(void)
 		  #endif*/
 		  free(buffer);
 		  filter_done = 0;
+		  //For monitoring the state only.
 		  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		  HAL_Delay(200);
+		  HAL_Delay(500);
 	  }
 	  else
 	  {
@@ -479,9 +489,11 @@ void signal_error(ERRORS err)
 	signal_with_diodes_ms(err, 1000);
 }
 
-void signal_error_with_eeprom()
+ERRORS check_if_threshold_level_exceeded()
 {
-	signal_with_diodes_ms(3, 1000);
+	long int threshold_from_eeprom = strtol(si.threshold,NULL,16);
+	if(measured_values[0] > threshold_from_eeprom) return OK;
+	else return THRESHOLD_LEVEL_EXCEEDED;
 }
 /* USER CODE END 4 */
 

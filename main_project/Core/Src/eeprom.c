@@ -50,13 +50,15 @@ void send_to_eeprom_byte_by_byte(uint16_t where, char* what)
 	}
 }
 
-void read_from_eeprom_single_byte(uint16_t addr, uint8_t* read_buffer)
+ERRORS read_from_eeprom_single_byte(uint16_t addr, uint8_t* read_buffer)
 {
 	if(HAL_I2C_Mem_Read(&hi2c1, EEPROM_ADDRESS, addr, 1, read_buffer, sizeof(*read_buffer), HAL_MAX_DELAY)!= HAL_OK)
 	{
-		char msg[] = "EEPROM_READ_ERROR";
-		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);
+		/*char msg[] = "EEPROM_READ_ERROR";
+		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);*/
+		return EEPROM_READ_ERROR;
 	}
+	return OK;
 }
 
 ERRORS read_from_eeprom_byte_by_byte(uint16_t addr, uint8_t num_of_bytes, uint8_t* read_buffer)
@@ -69,7 +71,7 @@ ERRORS read_from_eeprom_byte_by_byte(uint16_t addr, uint8_t num_of_bytes, uint8_
 			HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);*/
 			return EEPROM_READ_ERROR;
 		}
-		//HAL_Delay(500);
+		HAL_Delay(500);
 	}
 	return OK;
 }
@@ -128,14 +130,13 @@ void zero_eeprom_useful_mem()
 ERRORS check_eeprom_data()
 {
 	char data_start_check = 0, data_end_check = 0;
-	read_from_eeprom_single_byte(EEPROM_DATA_START_ADDR, (uint8_t*)&data_start_check);
-	read_from_eeprom_single_byte(EEPROM_DATA_END_ADDR, (uint8_t*)&data_end_check);
+	if((read_from_eeprom_single_byte(EEPROM_DATA_START_ADDR, (uint8_t*)&data_start_check) != OK)
+			|| 	(read_from_eeprom_single_byte(EEPROM_DATA_END_ADDR, (uint8_t*)&data_end_check) != OK))
+	{
+		return EEPROM_READ_ERROR;
+	}
 	if(data_start_check != '<' || data_end_check != '>')
 	{
-		/*TODO:
-			flash diodes because sensor or sensor's circuit is dead somehow
-			and set flag for turning off the whole device
-		*/
 		return EEPROM_DATA_INVALID;
 	}
 	return OK;
@@ -165,6 +166,12 @@ ERRORS read_sensor_data_from_eeprom(struct sensor_info* si)
 	{
 		return CRITICAL_ERROR;
 	}
+	char forbidden_version[] = "00";
+	if(strcmp(si->version_num,forbidden_version) == 0) //if they are identical
+	{
+		return EEPROM_SENSOR_VERSION_INVALID;
+	}
+
 	if(read_from_eeprom_byte_by_byte(SENSOR_ID_ADDR, SENSOR_ID_SIZE, (uint8_t*)(si->sensor_id)) != OK)
 	{
 		return CRITICAL_ERROR;
