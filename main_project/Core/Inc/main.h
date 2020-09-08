@@ -52,6 +52,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+void GPIO_AnalogState_Config();
+void SystemClock_24MHz(void);
 
 /* USER CODE END EFP */
 

@@ -48,13 +48,16 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
+I2C_HandleTypeDef hi2c1;
+
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint16_t adc_vals[NUM_OF_MEASUREMENTS] = {0};
 uint16_t measured_values[NUM_OF_MEASUREMENTS];  //in mV
 double measured_values_double[NUM_OF_MEASUREMENTS];  //in mV
-uint16_t filter_buffer_adc_11[FILTER_BUFFER_SIZE];//TODO: replace by single array of arrays
-uint16_t filter_buffer_adc_9[FILTER_BUFFER_SIZE];
+uint16_t filter_buffer_sensor[FILTER_BUFFER_SIZE];
+uint16_t filter_buffer_battery[FILTER_BUFFER_SIZE];
 uint16_t filter_counter = 0;
 uint8_t filter_done = 0;
 
@@ -423,6 +426,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
@@ -434,23 +438,96 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PH3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
+
+/*
+ * TODO
+ * leave one port/PIN for Ethanol sensor to wake up from the button press
+ */
+void GPIO_AnalogState_Config()
+{
+	GPIO_InitTypeDef GPIO_InitStruct;
+
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	//this port is for one pin only, required to switch boot options. I won't be using it.
+	//__HAL_RCC_GPIOH_CLK_ENABLE();
+
+	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Pin = GPIO_PIN_All;
+
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	//HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
+	__HAL_RCC_GPIOA_CLK_DISABLE();
+	__HAL_RCC_GPIOB_CLK_DISABLE();
+	__HAL_RCC_GPIOC_CLK_DISABLE();
+	//__HAL_RCC_GPIOH_CLK_DISABLE();
+}
+
+void SystemClock_24MHz(void)
+{
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+
+  /* MSI is enabled after System reset, update MSI to 24Mhz (RCC_MSIRANGE_9) */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
+  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
+  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+
+  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2
+     clocks dividers */
+  RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 //		measured_values[i] = (adc_vals[i]*3300)/4095;
 		if(!filter_done)
 		{
-			filter_buffer_adc_11[filter_counter] = adc_vals[0];
-			filter_buffer_adc_9[filter_counter] = adc_vals[1];
+			filter_buffer_sensor[filter_counter] = adc_vals[0];
+			filter_buffer_battery[filter_counter] = adc_vals[1];
 
 			if(filter_counter == FILTER_BUFFER_SIZE-1)
 			{
 				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
 				{
-					holder[0] += filter_buffer_adc_11[i];
-					holder[1] += filter_buffer_adc_9[i];
+					holder[0] += filter_buffer_sensor[i];
+					holder[1] += filter_buffer_battery[i];
 				}
 				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
 				{
