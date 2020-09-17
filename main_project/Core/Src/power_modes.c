@@ -34,7 +34,7 @@ ERRORS rtc_set_alarm_in_seconds(RTC_HandleTypeDef* hrtc, int seconds)
 
 
 
-void power_mode_sleep()
+void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 {
 	/* Set all GPIO in analog state to reduce power consumption */
 	GPIO_AnalogState_Config();
@@ -46,6 +46,9 @@ void power_mode_sleep()
 	__HAL_RCC_PWR_CLK_ENABLE();
 	/* Configure the main internal regulator output voltage */
 	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
+
+	/* Set timer for 5s */
+	HAL_RTCEx_SetWakeUpTimer_IT(hrtc, 0x2710, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
 
 	/* Suspend Tick increment to prevent wakeup by Systick interrupt.         */
 	/* Otherwise the Systick interrupt will wake up the device within 1ms     */
@@ -64,19 +67,4 @@ void power_mode_sleep()
 	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 }
 
-void power_mode_select(int mode)
-{
-	switch(mode)
-	{
-		case 0:
-		{
-			power_mode_sleep();
-			break;
-		}
-		case 1:
-		{
-			//TODO ???
-		}
-	}
-}
 

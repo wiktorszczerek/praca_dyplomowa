@@ -151,8 +151,9 @@ int main(void)
 	#ifdef RTC_TEST
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 	  //rtc_set_alarm_in_seconds(&hrtc, RTC_TIME_INTERVAL);
-	  power_mode_sleep();
+	  power_mode_sleep(&hrtc);
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+	  HAL_Delay(1000);
 	#else
 	  if(last_error == OK)
 	  {
@@ -438,23 +439,12 @@ static void MX_RTC_Init(void)
   {
     Error_Handler();
   }
-  /** Enable the Alarm A
+  /** Enable the WakeUp
   */
-/*  sAlarm.AlarmTime.Hours = 0x0;
-  sAlarm.AlarmTime.Minutes = 0x0;
-  sAlarm.AlarmTime.Seconds = 0x0;
-  sAlarm.AlarmTime.SubSeconds = 0x0;
-  sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_NONE;
-  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
-  sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
-  sAlarm.AlarmDateWeekDay = 0x1;
-  sAlarm.Alarm = RTC_ALARM_A;
-  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }*/
+//  if (HAL_RTCEx_SetWakeUpTimer(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -666,11 +656,13 @@ ERRORS check_if_threshold_level_exceeded()
   * @param  hrtc : RTC handle
   * @retval None
   */
-void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
+
+void HAL_RTC_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-  /* Turn LED3 on: Alarm generation */
-	HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+	HAL_ResumeTick();
+	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
 }
+
 
 /* USER CODE END 4 */
 
