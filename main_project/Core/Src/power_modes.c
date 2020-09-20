@@ -32,6 +32,22 @@ ERRORS rtc_set_alarm_in_seconds(RTC_HandleTypeDef* hrtc, int seconds)
 	return OK;
 }
 
+void power_mode_stop(RTC_HandleTypeDef* hrtc)
+{
+	GPIO_AnalogState_Config();
+	__HAL_RCC_PWR_CLK_ENABLE();
+	HAL_RTCEx_SetWakeUpTimer_IT(hrtc, 0x2710, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+	HAL_SuspendTick();
+
+	RCC->AHB1SMENR = 0x0;
+	RCC->AHB2SMENR = 0x0;
+	RCC->AHB3SMENR = 0x0;
+	RCC->APB1SMENR1 = 0x0;
+	RCC->APB1SMENR2 = 0x0;
+	RCC->APB2SMENR = 0x0;
+
+	HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON,PWR_STOPENTRY_WFI);
+}
 
 
 void power_mode_sleep(RTC_HandleTypeDef* hrtc)
