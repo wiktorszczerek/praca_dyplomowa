@@ -48,7 +48,7 @@
 
 
 #define DEBUG_MODE
-#define RTC_TEST
+//#define RTC_TEST
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -74,7 +74,7 @@ uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
 
 struct sensor_info si;
-ERRORS last_error = NULL_STATE;
+ERRORS last_error = OK;
 
 #ifdef DEBUG_MODE
 uint32_t holder_debug[NUM_OF_MEASUREMENTS] = {0};
@@ -89,6 +89,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
@@ -132,16 +133,20 @@ int main(void)
   MX_ADC1_Init();
   MX_I2C1_Init();
   MX_RTC_Init();
+
+  /* Initialize interrupts */
+  MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-  sensor_info_init(&si);
-  last_error=read_sensor_data_from_eeprom(&si);
+//  sensor_info_init(&si);
+//  last_error=read_sensor_data_from_eeprom(&si);
 
   #ifdef DEBUG_MODE
-  show_read_sensor_data(&si);
+//  show_read_sensor_data(&si);
   #endif
 
-  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
+
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+  HAL_ADC_Start_DMA(&hadc1, adc_vals, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -149,18 +154,26 @@ int main(void)
   while (1)
   {
 	#ifdef RTC_TEST
-	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 	  //rtc_set_alarm_in_seconds(&hrtc, RTC_TIME_INTERVAL);
-	  power_mode_stop(&hrtc);
+	  power_mode_sleep(&hrtc);
+	  SystemClock_Config();
+	  MX_GPIO_Init();
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+	  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
 	  HAL_Delay(1000);
+	  HAL_ADC_Stop_DMA(&hadc1);
+	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 	#else
 	  if(last_error == OK)
 	  {
-		  buffer = (char*)malloc(100*sizeof(char));
-		  while(!filter_done){}
+		  char* buffer = (char*)malloc(100*sizeof(char));
 		  //sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
 		  //HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  #ifdef DEBUG_MODE
+		  HAL_UART_Transmit(&huart2, (uint8_t*)"\n", strlen("\n"), 10);
+		  sprintf(buffer,"Control group (bare 12b ADC readings, averaged): holder_debug[0] = %lu /// holder_debug[1] = %lu\r\n",adc_vals[0],adc_vals[1]);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  #else
 		  if((last_error = check_if_threshold_level_exceeded()) != OK)
 		  {
 			  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
@@ -169,11 +182,7 @@ int main(void)
 		  else
 			  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
 		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  /*#ifdef DEBUG_MODE
-		  HAL_UART_Transmit(&huart2, (uint8_t*)"\n", strlen("\n"), 10);
-		  sprintf(buffer,"Control group (bare 12b ADC readings, averaged): holder_debug[0] = %lu /// holder_debug[1] = %lu\r\n",holder_debug[0],holder_debug[1]);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  #endif*/
+		  #endif
 		  free(buffer);
 		  filter_done = 0;
 		  //For monitoring the state only.
@@ -213,15 +222,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 16;
+  RCC_OscInitStruct.PLL.PLLN = 8;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
@@ -248,9 +255,9 @@ void SystemClock_Config(void)
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
+  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_HSE;
   PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
-  PeriphClkInit.PLLSAI1.PLLSAI1N = 16;
+  PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
   PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
   PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
   PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
@@ -259,15 +266,32 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  /** Enables the Clock Security System
+  */
+  HAL_RCC_EnableCSS();
+  /** Enables the Clock Security System
+  */
+  HAL_RCCEx_EnableLSECSS();
   /** Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Enable MSI Auto calibration
+}
+
+/**
+  * @brief NVIC Configuration.
+  * @retval None
   */
-  HAL_RCCEx_EnableMSIPLLMode();
+static void MX_NVIC_Init(void)
+{
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* RTC_WKUP_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(RTC_WKUP_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(RTC_WKUP_IRQn);
 }
 
 /**
@@ -310,9 +334,9 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -322,7 +346,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Channel = ADC_CHANNEL_11;
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -439,10 +463,10 @@ static void MX_RTC_Init(void)
   }
   /** Enable the WakeUp
   */
-//  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -493,11 +517,6 @@ static void MX_DMA_Init(void)
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
 
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-
 }
 
 /**
@@ -513,9 +532,26 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PA1 PA3 PA5 PA7
+                           PA8 PA11 PA12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_11|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB0 PB1 PB4 PB5
+                           PB6 PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5
+                          |GPIO_PIN_6|GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD3_Pin */
   GPIO_InitStruct.Pin = LD3_Pin;
@@ -523,6 +559,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PH3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
 }
 
@@ -539,8 +581,7 @@ void GPIO_AnalogState_Config()
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
-	//this port is for one pin only, required to switch boot options. I won't be using it.
-	//__HAL_RCC_GPIOH_CLK_ENABLE();
+	__HAL_RCC_GPIOH_CLK_ENABLE();
 
 	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -550,15 +591,15 @@ void GPIO_AnalogState_Config()
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-	//HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
 	__HAL_RCC_GPIOA_CLK_DISABLE();
 	__HAL_RCC_GPIOB_CLK_DISABLE();
 	__HAL_RCC_GPIOC_CLK_DISABLE();
-	//__HAL_RCC_GPIOH_CLK_DISABLE();
+	__HAL_RCC_GPIOH_CLK_DISABLE();
 }
 
-void SystemClock_24MHz(void)
+void SystemClock_Low(void)
 {
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -566,7 +607,7 @@ void SystemClock_24MHz(void)
   /* MSI is enabled after System reset, update MSI to 24Mhz (RCC_MSIRANGE_9) */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
   if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -590,41 +631,41 @@ void SystemClock_24MHz(void)
 
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-//		measured_values[i] = (adc_vals[i]*3300)/4095;
-		if(!filter_done)
-		{
-			filter_buffer_sensor[filter_counter] = adc_vals[0];
-			filter_buffer_battery[filter_counter] = adc_vals[1];
-
-			if(filter_counter == FILTER_BUFFER_SIZE-1)
-			{
-				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
-				{
-					holder[0] += filter_buffer_sensor[i];
-					holder[1] += filter_buffer_battery[i];
-				}
-				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
-				{
-					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
-					measured_values[i] = (uint16_t)measured_values_double[i];
-					#ifdef DEBUG_MODE
-					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
-					#endif
-					holder[i] = 0;
-				}
-				filter_done = 1;
-				filter_counter = 0;
-			}
-			else
-				filter_counter++;
-		}
-		else
-		{
-			//do nothing
-		}
-}
+//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+//{
+////		measured_values[i] = (adc_vals[i]*3300)/4095;
+//		if(!filter_done)
+//		{
+//			filter_buffer_sensor[filter_counter] = HAL_ADC_GetValue(&hadc1);
+//			filter_buffer_battery[filter_counter] = adc_vals[1];
+//
+//			if(filter_counter == FILTER_BUFFER_SIZE-1)
+//			{
+//				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
+//				{
+//					holder[0] += filter_buffer_sensor[i];
+//					holder[1] += filter_buffer_battery[i];
+//				}
+//				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
+//				{
+//					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
+//					measured_values[i] = (uint16_t)measured_values_double[i];
+//					#ifdef DEBUG_MODE
+//					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
+//					#endif
+//					holder[i] = 0;
+//				}
+//				filter_done = 1;
+//				filter_counter = 0;
+//			}
+//			else
+//				filter_counter++;
+//		}
+//		else
+//		{
+//			//do nothing
+//		}
+//}
 
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms)
 {
@@ -655,13 +696,13 @@ ERRORS check_if_threshold_level_exceeded()
   * @retval None
   */
 
-void HAL_RTC_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-{
-	HAL_ResumeTick();
-	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
-	SystemClock_Config();
-	MX_GPIO_Init();
-}
+//void HAL_RTC_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+//{
+//	HAL_ResumeTick();
+//	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
+//	SystemClock_Config();
+//	MX_GPIO_Init();
+//}
 
 
 /* USER CODE END 4 */
@@ -674,7 +715,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-	signal_with_diodes_ms(10,200);
+//	signal_with_diodes_ms(10,200);
   /* USER CODE END Error_Handler_Debug */
 }
 

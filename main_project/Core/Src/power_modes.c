@@ -55,8 +55,8 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 	/* Set all GPIO in analog state to reduce power consumption */
 	GPIO_AnalogState_Config();
 
-	/* Set the System clock to 24 MHz (MSI) */
-	SystemClock_24MHz();
+	/* Set the System clock to low freq TODO 1MHz? */
+	SystemClock_Low();
 
 	/* Enable Power Clock */
 	__HAL_RCC_PWR_CLK_ENABLE();
@@ -81,6 +81,10 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 
 	/* Enter SLEEP Mode, Main regulator is ON */
 	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+
+	HAL_ResumeTick();
 }
+
+
 
 
