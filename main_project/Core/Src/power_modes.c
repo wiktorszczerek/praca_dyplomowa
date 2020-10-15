@@ -83,6 +83,7 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
 	HAL_ResumeTick();
+	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
 }
 
 

@@ -44,9 +44,7 @@
 #define MAX_ADC_VALUE				4095
 #define RTC_TIME_INTERVAL 			5 //seconds
 
-
-
-
+//#define RTC_TEST
 #define DEBUG_MODE
 //#define RTC_TEST
 /* USER CODE END PM */
@@ -94,6 +92,7 @@ static void MX_NVIC_Init(void);
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
+void reinitializePeriphs();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -114,7 +113,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+
+	HAL_Init();
 
   /* USER CODE BEGIN Init */
   /* USER CODE END Init */
@@ -137,16 +137,20 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-//  sensor_info_init(&si);
-//  last_error=read_sensor_data_from_eeprom(&si);
+#ifdef DEBUG_MODE
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+#endif
+  sensor_info_init(&si);
+  last_error=read_sensor_data_from_eeprom(&si);
 
   #ifdef DEBUG_MODE
-//  show_read_sensor_data(&si);
+  show_read_sensor_data(&si);
   #endif
 
 
+#ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-  HAL_ADC_Start_DMA(&hadc1, adc_vals, 2);
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -156,23 +160,32 @@ int main(void)
 	#ifdef RTC_TEST
 	  //rtc_set_alarm_in_seconds(&hrtc, RTC_TIME_INTERVAL);
 	  power_mode_sleep(&hrtc);
-	  SystemClock_Config();
-	  MX_GPIO_Init();
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 	  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
-	  HAL_Delay(1000);
+	  while(!filter_done){}
 	  HAL_ADC_Stop_DMA(&hadc1);
+	  HAL_Delay(1000);
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 	#else
 	  if(last_error == OK)
 	  {
 		  char* buffer = (char*)malloc(100*sizeof(char));
+		  power_mode_sleep(&hrtc);
+		  SystemClock_Config();
+//		  reinitializePeriphs();
+		  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
+		  while(!filter_done){}
+		  MX_GPIO_Init();
+		  HAL_ADC_Stop_DMA(&hadc1);
+//		  HAL_ADCEx_RegularStop_DMA(&hadc1);
 		  //sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
 		  //HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
 		  #ifdef DEBUG_MODE
-		  HAL_UART_Transmit(&huart2, (uint8_t*)"\n", strlen("\n"), 10);
-		  sprintf(buffer,"Control group (bare 12b ADC readings, averaged): holder_debug[0] = %lu /// holder_debug[1] = %lu\r\n",adc_vals[0],adc_vals[1]);
+		  sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
 		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+		  HAL_Delay(1000);
+		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 		  #else
 		  if((last_error = check_if_threshold_level_exceeded()) != OK)
 		  {
@@ -185,9 +198,6 @@ int main(void)
 		  #endif
 		  free(buffer);
 		  filter_done = 0;
-		  //For monitoring the state only.
-		  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		  HAL_Delay(500);
 	  }
 	  else
 	  {
@@ -222,13 +232,15 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 8;
+  RCC_OscInitStruct.PLL.PLLN = 16;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
@@ -255,9 +267,9 @@ void SystemClock_Config(void)
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_HSE;
+  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
   PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
-  PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
+  PeriphClkInit.PLLSAI1.PLLSAI1N = 16;
   PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
   PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
   PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
@@ -266,18 +278,15 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Enables the Clock Security System
-  */
-  HAL_RCC_EnableCSS();
-  /** Enables the Clock Security System
-  */
-  HAL_RCCEx_EnableLSECSS();
   /** Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();
   }
+  /** Enable MSI Auto calibration
+  */
+  HAL_RCCEx_EnableMSIPLLMode();
 }
 
 /**
@@ -569,6 +578,15 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void reinitializePeriphs()
+{
+	SystemClock_Config();
+	MX_GPIO_Init();
+	MX_DMA_Init();
+//	MX_USART2_UART_Init();
+}
+
+
 
 /*
  * TODO
@@ -588,12 +606,12 @@ void GPIO_AnalogState_Config()
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Pin = GPIO_PIN_All;
 
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+//	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
-	__HAL_RCC_GPIOA_CLK_DISABLE();
+//	__HAL_RCC_GPIOA_CLK_DISABLE();
 	__HAL_RCC_GPIOB_CLK_DISABLE();
 	__HAL_RCC_GPIOC_CLK_DISABLE();
 	__HAL_RCC_GPIOH_CLK_DISABLE();
@@ -631,41 +649,41 @@ void SystemClock_Low(void)
 
 }
 
-//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-//{
-////		measured_values[i] = (adc_vals[i]*3300)/4095;
-//		if(!filter_done)
-//		{
-//			filter_buffer_sensor[filter_counter] = HAL_ADC_GetValue(&hadc1);
-//			filter_buffer_battery[filter_counter] = adc_vals[1];
-//
-//			if(filter_counter == FILTER_BUFFER_SIZE-1)
-//			{
-//				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
-//				{
-//					holder[0] += filter_buffer_sensor[i];
-//					holder[1] += filter_buffer_battery[i];
-//				}
-//				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
-//				{
-//					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
-//					measured_values[i] = (uint16_t)measured_values_double[i];
-//					#ifdef DEBUG_MODE
-//					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
-//					#endif
-//					holder[i] = 0;
-//				}
-//				filter_done = 1;
-//				filter_counter = 0;
-//			}
-//			else
-//				filter_counter++;
-//		}
-//		else
-//		{
-//			//do nothing
-//		}
-//}
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+//		measured_values[i] = (adc_vals[i]*3300)/4095;
+		if(!filter_done)
+		{
+			filter_buffer_sensor[filter_counter] = adc_vals[0];
+			filter_buffer_battery[filter_counter] = adc_vals[1];
+
+			if(filter_counter == FILTER_BUFFER_SIZE-1)
+			{
+				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
+				{
+					holder[0] += filter_buffer_sensor[i];
+					holder[1] += filter_buffer_battery[i];
+				}
+				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
+				{
+					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
+					measured_values[i] = (uint16_t)measured_values_double[i];
+					#ifdef DEBUG_MODE
+					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
+					#endif
+					holder[i] = 0;
+				}
+				filter_done = 1;
+				filter_counter = 0;
+			}
+			else
+				filter_counter++;
+		}
+		else
+		{
+			//do nothing
+		}
+}
 
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms)
 {
