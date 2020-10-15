@@ -29,11 +29,19 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+//+++++++++++++++++++++++++++++++++++++++
+//Specify type of sensor here (uncomment the proper line)
+//+++++++++++++++++++++++++++++++++++++++
+#define SENSOR_CARBON_MONOXIDE
+//#define SENSOR_ETHANOL
+//#define SENSOR_NITROGEN_DIOXIDE
+//#define SENSOR_METHANE
+
 typedef enum SENSOR_TYPES
 {
 	CARBON_MONOXIDE,
 	ETHANOL,
-	DINITROGEN_DIOXIDE,
+	NITROGEN_DIOXIDE,
 	METHANE
 }SENSOR_TYPES;
 
@@ -54,17 +62,28 @@ struct sensor_info
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define STRUCT_SIZE								8
-
-#define VERSION_NUM								44									//0-255
+//+++++++++++++++++++++++++++++++++++++++
+//Specify version number!
+//+++++++++++++++++++++++++++++++++++++++
+#define VERSION_NUM								1									//0-255
+//+++++++++++++++++++++++++++++++++++++++
+//Specify sensor parameters for wanted type!
+//+++++++++++++++++++++++++++++++++++++++
+#if defined(SENSOR_CARBON_MONOXIDE)
 #define SENSOR_ID 								1									//0-255
-#define SENSOR_TYPE								ETHANOL						//enum SENSOR_TYPES
+#define SENSOR_TYPE								CARBON_MONOXIDE						//enum SENSOR_TYPES
 //this coefficient is usually 1-5 nA/ppm -> so f.e. 2.220 will look like: DEC = 2 , FRAC = 220
 #define CURRENT_PER_PPM_COEFFICIENT_DEC			1									//depends on the sensor, but ususally >1
-#define CURRENT_PER_PPM_COEFFICIENT_FRAC		940									//0-999
-#define THRESHOLD								4095								//0-4095 for 12b configured ADC
-#define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	40890									//0 when factory-reset (0-65356)
-#define SENSOR_FIRED_COUNTER					65356								//0 when factory-reset (0-16 777 215)
+#define CURRENT_PER_PPM_COEFFICIENT_FRAC		592									//0-999
+#define THRESHOLD								43								//0-4095 for 12b configured ADC
+#define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	0									//0 when factory-reset (0-65356)
+#define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215)
+#elif defined(SENSOR_ETHANOL)
+
+
+#endif
+
+#define STRUCT_SIZE								8
 
 #define EEPROM_DATA_START						'<'
 #define EEPROM_DATA_END							'>'
@@ -388,14 +407,14 @@ void send_to_eeprom_begin_and_end_markers()
 		sprintf(msg,"WRITE OPERATION FAILED at start eeprom data");
 		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);
 	}
-	HAL_Delay(500);
+	HAL_Delay(1000);
 
 	if(HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDRESS, EEPROM_DATA_END_ADDR, 1, (uint8_t*)&end, sizeof(end), HAL_MAX_DELAY)!=HAL_OK)
 	{
 		sprintf(msg,"WRITE OPERATION FAILED at end eeprom data");
 		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);
 	}
-	HAL_Delay(500);
+	HAL_Delay(1000);
 }
 
 void write_sensor_info_to_eeprom(struct sensor_info* si)

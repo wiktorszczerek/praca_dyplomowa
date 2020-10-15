@@ -25,6 +25,7 @@
 #include "shared_variables.h"
 #include "includes.h"
 #include "eeprom.h"
+#include "power_modes.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,20 +42,29 @@
 #define NUM_OF_MEASUREMENTS 		2
 #define FILTER_BUFFER_SIZE			1000
 #define MAX_ADC_VALUE				4095
+#define RTC_TIME_INTERVAL 			5 //seconds
+
+//#define RTC_TEST
 #define DEBUG_MODE
+//#define RTC_TEST
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
+I2C_HandleTypeDef hi2c1;
+
+RTC_HandleTypeDef hrtc;
+
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint16_t adc_vals[NUM_OF_MEASUREMENTS] = {0};
 uint16_t measured_values[NUM_OF_MEASUREMENTS];  //in mV
 double measured_values_double[NUM_OF_MEASUREMENTS];  //in mV
-uint16_t filter_buffer_adc_11[FILTER_BUFFER_SIZE];//TODO: replace by single array of arrays
-uint16_t filter_buffer_adc_9[FILTER_BUFFER_SIZE];
+uint16_t filter_buffer_sensor[FILTER_BUFFER_SIZE];
+uint16_t filter_buffer_battery[FILTER_BUFFER_SIZE];
 uint16_t filter_counter = 0;
 uint8_t filter_done = 0;
 
@@ -62,7 +72,7 @@ uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
 
 struct sensor_info si;
-ERRORS last_error = NULL_STATE;
+ERRORS last_error = OK;
 
 #ifdef DEBUG_MODE
 uint32_t holder_debug[NUM_OF_MEASUREMENTS] = {0};
@@ -76,10 +86,13 @@ static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_RTC_Init(void);
+static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
+void reinitializePeriphs();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -100,10 +113,10 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+
+	HAL_Init();
 
   /* USER CODE BEGIN Init */
-  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -119,7 +132,14 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
+  MX_RTC_Init();
+
+  /* Initialize interrupts */
+  MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
+#ifdef DEBUG_MODE
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+#endif
   sensor_info_init(&si);
   last_error=read_sensor_data_from_eeprom(&si);
 
@@ -127,21 +147,46 @@ int main(void)
   show_read_sensor_data(&si);
   #endif
 
-  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
-  char* buffer = NULL;
+
+#ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	#ifdef RTC_TEST
+	  //rtc_set_alarm_in_seconds(&hrtc, RTC_TIME_INTERVAL);
+	  power_mode_sleep(&hrtc);
+	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+	  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
+	  while(!filter_done){}
+	  HAL_ADC_Stop_DMA(&hadc1);
+	  HAL_Delay(1000);
+	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+	#else
 	  if(last_error == OK)
 	  {
-		  buffer = (char*)malloc(100*sizeof(char));
+		  char* buffer = (char*)malloc(100*sizeof(char));
+		  power_mode_sleep(&hrtc);
+		  SystemClock_Config();
+//		  reinitializePeriphs();
+		  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
 		  while(!filter_done){}
+		  MX_GPIO_Init();
+		  HAL_ADC_Stop_DMA(&hadc1);
+//		  HAL_ADCEx_RegularStop_DMA(&hadc1);
 		  //sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
 		  //HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  #ifdef DEBUG_MODE
+		  sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+		  HAL_Delay(1000);
+		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+		  #else
 		  if((last_error = check_if_threshold_level_exceeded()) != OK)
 		  {
 			  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
@@ -150,16 +195,9 @@ int main(void)
 		  else
 			  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
 		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  /*#ifdef DEBUG_MODE
-		  HAL_UART_Transmit(&huart2, (uint8_t*)"\n", strlen("\n"), 10);
-		  sprintf(buffer,"Control group (bare 12b ADC readings, averaged): holder_debug[0] = %lu /// holder_debug[1] = %lu\r\n",holder_debug[0],holder_debug[1]);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  #endif*/
+		  #endif
 		  free(buffer);
 		  filter_done = 0;
-		  //For monitoring the state only.
-		  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		  HAL_Delay(500);
 	  }
 	  else
 	  {
@@ -169,6 +207,7 @@ int main(void)
 			  HAL_Delay(1000);
 		  }
 	  }
+	#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -222,11 +261,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_ADC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_ADC;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
   PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
   PeriphClkInit.PLLSAI1.PLLSAI1N = 16;
@@ -247,6 +287,20 @@ void SystemClock_Config(void)
   /** Enable MSI Auto calibration
   */
   HAL_RCCEx_EnableMSIPLLMode();
+}
+
+/**
+  * @brief NVIC Configuration.
+  * @retval None
+  */
+static void MX_NVIC_Init(void)
+{
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* RTC_WKUP_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(RTC_WKUP_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(RTC_WKUP_IRQn);
 }
 
 /**
@@ -289,9 +343,9 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -301,7 +355,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Channel = ADC_CHANNEL_11;
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -360,6 +414,75 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_SUNDAY;
+  sDate.Month = RTC_MONTH_SEPTEMBER;
+  sDate.Date = 0x12;
+  sDate.Year = 0x99;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -403,11 +526,6 @@ static void MX_DMA_Init(void)
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
 
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-
 }
 
 /**
@@ -423,9 +541,26 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PA1 PA3 PA5 PA7
+                           PA8 PA11 PA12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_3|GPIO_PIN_5|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_11|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB0 PB1 PB4 PB5
+                           PB6 PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5
+                          |GPIO_PIN_6|GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD3_Pin */
   GPIO_InitStruct.Pin = LD3_Pin;
@@ -434,23 +569,100 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PH3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
 }
 
 /* USER CODE BEGIN 4 */
+void reinitializePeriphs()
+{
+	SystemClock_Config();
+	MX_GPIO_Init();
+	MX_DMA_Init();
+//	MX_USART2_UART_Init();
+}
+
+
+
+/*
+ * TODO
+ * leave one port/PIN for Ethanol sensor to wake up from the button press
+ */
+void GPIO_AnalogState_Config()
+{
+	GPIO_InitTypeDef GPIO_InitStruct;
+
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_GPIOH_CLK_ENABLE();
+
+	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Pin = GPIO_PIN_All;
+
+//	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
+//	__HAL_RCC_GPIOA_CLK_DISABLE();
+	__HAL_RCC_GPIOB_CLK_DISABLE();
+	__HAL_RCC_GPIOC_CLK_DISABLE();
+	__HAL_RCC_GPIOH_CLK_DISABLE();
+}
+
+void SystemClock_Low(void)
+{
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+
+  /* MSI is enabled after System reset, update MSI to 24Mhz (RCC_MSIRANGE_9) */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
+  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
+  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+
+  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2
+     clocks dividers */
+  RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 //		measured_values[i] = (adc_vals[i]*3300)/4095;
 		if(!filter_done)
 		{
-			filter_buffer_adc_11[filter_counter] = adc_vals[0];
-			filter_buffer_adc_9[filter_counter] = adc_vals[1];
+			filter_buffer_sensor[filter_counter] = adc_vals[0];
+			filter_buffer_battery[filter_counter] = adc_vals[1];
 
 			if(filter_counter == FILTER_BUFFER_SIZE-1)
 			{
 				for(int i=0;i<FILTER_BUFFER_SIZE;++i)
 				{
-					holder[0] += filter_buffer_adc_11[i];
-					holder[1] += filter_buffer_adc_9[i];
+					holder[0] += filter_buffer_sensor[i];
+					holder[1] += filter_buffer_battery[i];
 				}
 				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
 				{
@@ -495,6 +707,22 @@ ERRORS check_if_threshold_level_exceeded()
 	if(measured_values[0] > threshold_from_eeprom) return OK;
 	else return THRESHOLD_LEVEL_EXCEEDED;
 }
+
+/**
+  * @brief  Alarm callback
+  * @param  hrtc : RTC handle
+  * @retval None
+  */
+
+//void HAL_RTC_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+//{
+//	HAL_ResumeTick();
+//	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
+//	SystemClock_Config();
+//	MX_GPIO_Init();
+//}
+
+
 /* USER CODE END 4 */
 
 /**
@@ -505,7 +733,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-	signal_with_diodes_ms(10,200);
+//	signal_with_diodes_ms(10,200);
   /* USER CODE END Error_Handler_Debug */
 }
 
