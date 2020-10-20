@@ -72,11 +72,11 @@ struct sensor_data {
 	uint8_t version_num; /**< version of this info. CAN'T BE 0 (ZERO) - THIS VALUE IS USED ONLY FOR EEPROM ERROR CHECKS. */
 	uint8_t sensor_id;
 	uint8_t sensor_type;
-	uint current_per_ppm_coefficient_dec;
-	long current_per_ppm_coefficient_frac;
-	long threshold;
-	long device_turned_on_with_sensor_counter;
-	long sensor_fired_counter;
+	uint8_t current_per_ppm_coefficient_dec;
+	uint16_t current_per_ppm_coefficient_frac;
+	uint16_t threshold;
+	uint16_t device_turned_on_with_sensor_counter;
+	uint32_t sensor_fired_counter;
 };
 
 
@@ -87,9 +87,10 @@ void write_sensor_info_to_eeprom(struct sensor_info* si);
 void zero_eeprom_useful_mem();
 
 void sensor_info_init(struct sensor_info* si);
-ERRORS read_sensor_data_from_eeprom(struct sensor_info* si);
+ERRORS read_sensor_data_from_eeprom(struct sensor_data* sd);
 
 //DEBUG ONLY
+ERRORS read_sensor_data_from_eeprom(struct sensor_info* si);
 void show_read_sensor_data(struct sensor_info* si);
 
 #endif /* INC_EEPROM_H_ */

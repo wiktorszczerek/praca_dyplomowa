@@ -160,7 +160,16 @@ void add_end_chars_to_sensor_info(struct sensor_info* si)
 	si->sensor_fired_counter[SENSOR_FIRED_COUNTER_SIZE]									= '\0';
 }
 
+ERRORS map_sensor_info_to_data(struct sensor_info* si, struct sensor_data* sd) {
+	ERRORS last_error = OK;
 
+}
+
+
+ERRORS read_sensor_data_from_eeprom(struct sensor_data* sd) {
+	struct sensor_info si;
+	ERRORS last_error=read_sensor_data_from_eeprom(&si);
+}
 
 ERRORS read_sensor_data_from_eeprom(struct sensor_info* si)
 {

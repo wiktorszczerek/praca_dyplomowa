@@ -145,6 +145,7 @@ int main(void)
   #endif
 
 
+
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 #endif
