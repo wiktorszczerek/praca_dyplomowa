@@ -29,10 +29,6 @@ typedef enum ERRORS
 	RTC_SET_ALARM_ERROR
 }ERRORS;
 
-typedef enum ERROR_CATEGORIES
-{
-	EEPROM
-}ERROR_CATEGORIES;
 
 
 #endif /* INC_INCLUDES_H_ */

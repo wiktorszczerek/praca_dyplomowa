@@ -51,31 +51,33 @@
 #define CURRENT_PER_PPM_COEFFICIENT_DEC_ADDR		0x07		//+2
 #define CURRENT_PER_PPM_COEFFICIENT_FRAC_ADDR		0x09		//+3
 #define THRESHOLD_ADDR								0x0C		//+3
-//another line, because of weird things with this EEPROM's addressing
 #define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER_ADDR	0x0F		//+4
 #define SENSOR_FIRED_COUNTER_ADDR					0x13		//+6
 #define EEPROM_DATA_END_ADDR						0x19
+
+typedef enum SENSOR_TYPES
+{
+	CARBON_MONOXIDE,
+	ETHANOL,
+	DINITROGEN_DIOXIDE,
+	METHANE
+}SENSOR_TYPES;
 
 
 //STRUCTS
 /**
  * A structure to hold the info about sensor plugged into the circuit.
  */
-struct sensor_info
-{
-	//(each field +1 because of the \0 sign, needed in formatting)
-	/*@{*/
-	char version_num[VERSION_NUM_SIZE+1]; /**< version of this info. CAN'T BE 0 (ZERO) - THIS VALUE IS USED ONLY FOR EEPROM ERROR CHECKS. */
-	char sensor_id[SENSOR_ID_SIZE+1];
-	char sensor_type[SENSOR_TYPE_SIZE+1];
-	char current_per_ppm_coefficient_dec[CURRENT_PER_PPM_COEFFICIENT_DEC_SIZE+1];
-	char current_per_ppm_coefficient_frac[CURRENT_PER_PPM_COEFFICIENT_FRAC_SIZE+1];
-	char threshold[THRESHOLD_SIZE+1];
-	char device_turned_on_with_sensor_counter[DEVICE_TURNED_ON_WITH_SENSOR_COUNTER_SIZE+1];
-	char sensor_fired_counter[SENSOR_FIRED_COUNTER_SIZE+1];
-	/*@}*/
+struct sensor_data {
+	uint8_t version_num; /**< version of this info. CAN'T BE 0 (ZERO) - THIS VALUE IS USED ONLY FOR EEPROM ERROR CHECKS. */
+	uint8_t sensor_id;
+	uint8_t sensor_type;
+	uint current_per_ppm_coefficient_dec;
+	long current_per_ppm_coefficient_frac;
+	long threshold;
+	long device_turned_on_with_sensor_counter;
+	long sensor_fired_counter;
 };
-
 
 
 //FUNCTIONS

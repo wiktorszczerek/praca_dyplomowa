@@ -44,9 +44,7 @@
 #define MAX_ADC_VALUE				4095
 #define RTC_TIME_INTERVAL 			5 //seconds
 
-//#define RTC_TEST
 #define DEBUG_MODE
-//#define RTC_TEST
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -72,7 +70,7 @@ uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
 
 struct sensor_info si;
-ERRORS last_error = OK;
+ERRORS last_error = NULL_STATE;
 
 #ifdef DEBUG_MODE
 uint32_t holder_debug[NUM_OF_MEASUREMENTS] = {0};
@@ -142,7 +140,6 @@ int main(void)
 #endif
   sensor_info_init(&si);
   last_error=read_sensor_data_from_eeprom(&si);
-
   #ifdef DEBUG_MODE
   show_read_sensor_data(&si);
   #endif
@@ -157,44 +154,29 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	#ifdef RTC_TEST
-	  //rtc_set_alarm_in_seconds(&hrtc, RTC_TIME_INTERVAL);
-	  power_mode_sleep(&hrtc);
-	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-	  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
-	  while(!filter_done){}
-	  HAL_ADC_Stop_DMA(&hadc1);
-	  HAL_Delay(1000);
-	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-	#else
 	  if(last_error == OK)
 	  {
 		  char* buffer = (char*)malloc(100*sizeof(char));
 		  power_mode_sleep(&hrtc);
-		  SystemClock_Config();
-//		  reinitializePeriphs();
+		  reinitializePeriphs();
 		  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
 		  while(!filter_done){}
-		  MX_GPIO_Init();
 		  HAL_ADC_Stop_DMA(&hadc1);
-//		  HAL_ADCEx_RegularStop_DMA(&hadc1);
-		  //sprintf(buffer,"Measured: ADC11(green) = %u[mV]  /// ADC9(yellow) = %u[mV]\r",measured_values[0],measured_values[1]);
-		  //HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
 		  #ifdef DEBUG_MODE
-		  sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-		  HAL_Delay(1000);
-		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+			  sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
+			  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+			  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+			  HAL_Delay(1000);
+			  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 		  #else
-		  if((last_error = check_if_threshold_level_exceeded()) != OK)
-		  {
-			  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
-		  	  last_error = OK; //erasing the error, after it was caught
-		  }
-		  else
-			  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
-		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+			  if((last_error = check_if_threshold_level_exceeded()) != OK)
+			  {
+				  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
+				  last_error = OK; //erasing the error, after it was caught
+			  }
+			  else
+				  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
+			  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
 		  #endif
 		  free(buffer);
 		  filter_done = 0;
@@ -207,7 +189,6 @@ int main(void)
 			  HAL_Delay(1000);
 		  }
 	  }
-	#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -582,8 +563,6 @@ void reinitializePeriphs()
 {
 	SystemClock_Config();
 	MX_GPIO_Init();
-	MX_DMA_Init();
-//	MX_USART2_UART_Init();
 }
 
 

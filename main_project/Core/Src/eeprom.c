@@ -7,14 +7,20 @@
 
 #include "eeprom.h"
 
-typedef enum SENSOR_TYPES
+struct sensor_info
 {
-	CARBON_MONOXIDE,
-	ETHANOL,
-	DINITROGEN_DIOXIDE,
-	METHANE
-}SENSOR_TYPES;
-
+	//(each field +1 because of the \0 sign, needed in formatting)
+	/*@{*/
+	char version_num[VERSION_NUM_SIZE+1]; /**< version of this info. CAN'T BE 0 (ZERO) - THIS VALUE IS USED ONLY FOR EEPROM ERROR CHECKS. */
+	char sensor_id[SENSOR_ID_SIZE+1];
+	char sensor_type[SENSOR_TYPE_SIZE+1];
+	char current_per_ppm_coefficient_dec[CURRENT_PER_PPM_COEFFICIENT_DEC_SIZE+1];
+	char current_per_ppm_coefficient_frac[CURRENT_PER_PPM_COEFFICIENT_FRAC_SIZE+1];
+	char threshold[THRESHOLD_SIZE+1];
+	char device_turned_on_with_sensor_counter[DEVICE_TURNED_ON_WITH_SENSOR_COUNTER_SIZE+1];
+	char sensor_fired_counter[SENSOR_FIRED_COUNTER_SIZE+1];
+	/*@}*/
+};
 
 void format_to_hex(uint16_t what, uint8_t num_of_signs, char* result)
 {
