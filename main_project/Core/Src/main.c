@@ -69,7 +69,7 @@ uint8_t filter_done = 0;
 uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
 
-struct sensor_info si;
+struct sensor_data sd;
 ERRORS last_error = NULL_STATE;
 
 #ifdef DEBUG_MODE
@@ -138,10 +138,9 @@ int main(void)
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 #endif
-  sensor_info_init(&si);
-  last_error=read_sensor_data_from_eeprom(&si);
+  last_error=read_sensor_data_from_eeprom(&sd);
   #ifdef DEBUG_MODE
-  show_read_sensor_data(&si);
+  show_read_sensor_data(&sd);
   #endif
 
 
@@ -683,8 +682,7 @@ void signal_error(ERRORS err)
 
 ERRORS check_if_threshold_level_exceeded()
 {
-	long int threshold_from_eeprom = strtol(si.threshold,NULL,16);
-	if(measured_values[0] > threshold_from_eeprom) return OK;
+	if(measured_values[0] > sd.threshold) return OK;
 	else return THRESHOLD_LEVEL_EXCEEDED;
 }
 
