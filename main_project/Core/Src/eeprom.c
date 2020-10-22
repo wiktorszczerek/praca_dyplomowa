@@ -7,20 +7,7 @@
 
 #include "eeprom.h"
 
-struct sensor_info
-{
-	//(each field +1 because of the \0 sign, needed in formatting)
-	/*@{*/
-	char version_num[VERSION_NUM_SIZE+1]; /**< version of this info. CAN'T BE 0 (ZERO) - THIS VALUE IS USED ONLY FOR EEPROM ERROR CHECKS. */
-	char sensor_id[SENSOR_ID_SIZE+1];
-	char sensor_type[SENSOR_TYPE_SIZE+1];
-	char current_per_ppm_coefficient_dec[CURRENT_PER_PPM_COEFFICIENT_DEC_SIZE+1];
-	char current_per_ppm_coefficient_frac[CURRENT_PER_PPM_COEFFICIENT_FRAC_SIZE+1];
-	char threshold[THRESHOLD_SIZE+1];
-	char device_turned_on_with_sensor_counter[DEVICE_TURNED_ON_WITH_SENSOR_COUNTER_SIZE+1];
-	char sensor_fired_counter[SENSOR_FIRED_COUNTER_SIZE+1];
-	/*@}*/
-};
+
 
 void format_to_hex(uint16_t what, uint8_t num_of_signs, char* result)
 {
@@ -160,9 +147,27 @@ void add_end_chars_to_sensor_info(struct sensor_info* si)
 	si->sensor_fired_counter[SENSOR_FIRED_COUNTER_SIZE]									= '\0';
 }
 
+//TODO check if there is any way to inspect if conversion went bad.
+void map_sensor_info_to_sensor_data(struct sensor_info* si, struct sensor_data* sd) {
+	sd->version_num = (uint8_t)strtoul(si->version_num, NULL, 16);
+	sd->sensor_id = (uint8_t)strtoul(si->sensor_id, NULL, 16);
+	sd->sensor_type = (uint8_t)strtoul(si->sensor_type, NULL, 16);
+	sd->current_per_ppm_coefficient_dec = (uint8_t)strtoul(si->current_per_ppm_coefficient_dec, NULL, 16);
+	sd->current_per_ppm_coefficient_frac = (uint16_t)strtoul(si->current_per_ppm_coefficient_frac, NULL, 16);
+	sd->threshold = (uint16_t)strtoul(si->threshold, NULL, 16);
+	sd->device_turned_on_with_sensor_counter = (uint16_t)strtoul(si->device_turned_on_with_sensor_counter, NULL, 16);
+	sd->sensor_fired_counter = (uint32_t)strtoul(si->sensor_fired_counter, NULL, 16);
+}
 
 
-ERRORS read_sensor_data_from_eeprom(struct sensor_info* si)
+ERRORS read_sensor_data_from_eeprom(struct sensor_data* sd) {
+	struct sensor_info si;
+	ERRORS last_error=read_sensor_info_from_eeprom(&si);
+	map_sensor_info_to_sensor_data(&si, sd);
+	return last_error;
+}
+
+ERRORS read_sensor_info_from_eeprom(struct sensor_info* si)
 {
 	if(check_eeprom_data() != OK)
 		return EEPROM_DATA_INVALID;
@@ -228,10 +233,10 @@ void sensor_info_init(struct sensor_info* si)
 	memset(si->sensor_fired_counter, '0', SENSOR_FIRED_COUNTER_SIZE);
 }
 
-void show_read_sensor_data(struct sensor_info* si)
+void show_read_sensor_info(struct sensor_info* si)
 {
 	char msg_buffer[256];
-	sprintf(msg_buffer,"+=========EEPROM=========+\n\r");
+	sprintf(msg_buffer,"+=======EEPROM[i]=========+\n\r");
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer)+1, 10);
 	sprintf(msg_buffer,"VERSION NUMBER: %s\n\r", si->version_num);
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer)+1, 10);
@@ -251,4 +256,29 @@ void show_read_sensor_data(struct sensor_info* si)
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer)+1, 10);
 	sprintf(msg_buffer,"+========================+\n\r");
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer)+1, 10);
+}
+
+void show_read_sensor_data(struct sensor_data* sd)
+{
+	char msg_buffer[256];
+	sprintf(msg_buffer,"+======EEPROM[d]=========+\n\r");
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"VERSION NUMBER: %u\n\r", sd->version_num);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"SENSOR ID: %u\n\r", sd->sensor_id);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"SENSOR TYPE: %u\n\r", sd->sensor_type);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"CURRENT_DEC: %u\n\r", sd->current_per_ppm_coefficient_dec);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"CURRENT FRAC: %u\n\r", sd->current_per_ppm_coefficient_frac);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"THRESHOLD: %u\n\r", sd->threshold);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"DEVICE ON COUNTER: %u\n\r", sd->device_turned_on_with_sensor_counter);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"SENSOR FIRED COUNTER: %lu\n\r", sd->sensor_fired_counter);
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
+	sprintf(msg_buffer,"+========================+\n\r");
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg_buffer, strlen(msg_buffer), 10);
 }
