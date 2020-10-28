@@ -167,10 +167,9 @@ int main(void)
 //			  reinitializePeriphs();
 			  if(!loop_counter) {
 				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+				  button_pressed = 0;
 				  reinitializePeriphs();
-				  while(button_pressed);
 			  }
-
 			  if(loop_counter != ETHANOL_LOOPS)
 				  loop_counter++;
 			  else
@@ -301,9 +300,6 @@ static void MX_NVIC_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* EXTI1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
   /* RTC_WKUP_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(RTC_WKUP_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(RTC_WKUP_IRQn);
@@ -478,10 +474,6 @@ static void MX_RTC_Init(void)
   }
   /** Enable the WakeUp
   */
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -587,6 +579,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
@@ -614,14 +610,15 @@ void GPIO_AnalogState_Config()
 	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Pin = GPIO_PIN_All;
 
-//	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	GPIO_InitStruct.Pin = GPIO_PIN_All & ~(GPIO_PIN_13 | GPIO_PIN_14);
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	GPIO_InitStruct.Pin = GPIO_PIN_All & ~(BUTTON_Pin);
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
-//	__HAL_RCC_GPIOA_CLK_DISABLE();
+	__HAL_RCC_GPIOA_CLK_DISABLE();
 	__HAL_RCC_GPIOB_CLK_DISABLE();
 	__HAL_RCC_GPIOC_CLK_DISABLE();
 	__HAL_RCC_GPIOH_CLK_DISABLE();
