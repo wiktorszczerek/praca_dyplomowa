@@ -12,7 +12,7 @@
 ERRORS rtc_setup();
 ERRORS rtc_set_alarm_in_seconds(RTC_HandleTypeDef* hrtc, int seconds);
 
-void power_mode_sleep(RTC_HandleTypeDef* hrtc);
+void power_mode_sleep(RTC_HandleTypeDef* hrtc, uint16_t timer);
 void power_mode_stop(RTC_HandleTypeDef* hrtc);
 
 #endif /* INC_POWER_MODES_H_ */

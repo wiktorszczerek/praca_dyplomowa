@@ -26,6 +26,7 @@
 #include "includes.h"
 #include "eeprom.h"
 #include "power_modes.h"
+#include "sensors.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,8 +43,8 @@
 #define NUM_OF_MEASUREMENTS 		2
 #define FILTER_BUFFER_SIZE			1000
 #define MAX_ADC_VALUE				4095
-#define RTC_TIME_INTERVAL 			5 //seconds
 
+//debug features - logging, raw measurements...
 #define DEBUG_MODE
 /* USER CODE END PM */
 
@@ -65,6 +66,7 @@ uint16_t filter_buffer_sensor[FILTER_BUFFER_SIZE];
 uint16_t filter_buffer_battery[FILTER_BUFFER_SIZE];
 uint16_t filter_counter = 0;
 uint8_t filter_done = 0;
+uint8_t button_pressed = 0;
 
 uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
@@ -91,6 +93,8 @@ void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
 void reinitializePeriphs();
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -111,8 +115,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-
-	HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
   /* USER CODE END Init */
@@ -148,6 +151,8 @@ int main(void)
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 #endif
+
+  int loop_counter = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -156,9 +161,26 @@ int main(void)
   {
 	  if(last_error == OK)
 	  {
+		  if(sd.sensor_type == ETHANOL) {
+//			  power_mode_sleep(&hrtc, ETHANOL_SLEEP_TIME);
+//			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
+//			  reinitializePeriphs();
+			  if(!loop_counter) {
+				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+				  reinitializePeriphs();
+				  while(button_pressed);
+			  }
+
+			  if(loop_counter != ETHANOL_LOOPS)
+				  loop_counter++;
+			  else
+				  loop_counter = 0;
+		  }
+		  else {
+			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
+			  reinitializePeriphs();
+		  }
 		  char* buffer = (char*)malloc(100*sizeof(char));
-		  power_mode_sleep(&hrtc);
-		  reinitializePeriphs();
 		  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
 		  while(!filter_done){}
 		  HAL_ADC_Stop_DMA(&hadc1);
@@ -279,6 +301,9 @@ static void MX_NVIC_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* EXTI1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
   /* RTC_WKUP_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(RTC_WKUP_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(RTC_WKUP_IRQn);
@@ -535,13 +560,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB4 PB5
-                           PB6 PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_6|GPIO_PIN_7;
+  /*Configure GPIO pins : PB0 PB4 PB5 PB6
+                           PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
+                          |GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BUTTON_Pin */
+  GPIO_InitStruct.Pin = BUTTON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BUTTON_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD3_Pin */
   GPIO_InitStruct.Pin = LD3_Pin;
@@ -700,6 +731,13 @@ ERRORS check_if_threshold_level_exceeded()
 //	MX_GPIO_Init();
 //}
 
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if(GPIO_Pin == BUTTON_Pin) {
+		button_pressed = 1;
+	}
+}
 
 /* USER CODE END 4 */
 

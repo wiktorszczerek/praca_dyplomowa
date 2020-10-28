@@ -58,6 +58,9 @@ void SystemClock_Low(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define BUTTON_Pin GPIO_PIN_1
+#define BUTTON_GPIO_Port GPIOB
+#define BUTTON_EXTI_IRQn EXTI1_IRQn
 #define LD3_Pin GPIO_PIN_3
 #define LD3_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
