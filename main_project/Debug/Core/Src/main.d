@@ -35,7 +35,11 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/shared_variables.h ../Core/Inc/includes.h ../Core/Inc/main.h \
  ../Core/Inc/eeprom.h ../Core/Inc/includes.h \
  ../Core/Inc/shared_variables.h ../Core/Inc/power_modes.h \
+<<<<<<< HEAD
  ../Core/Inc/sim808.h
+=======
+ ../Core/Inc/sensors.h
+>>>>>>> refs/heads/sensor-ethanol
 
 ../Core/Inc/main.h:
 
@@ -119,4 +123,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 
 ../Core/Inc/power_modes.h:
 
+<<<<<<< HEAD
 ../Core/Inc/sim808.h:
+=======
+../Core/Inc/sensors.h:
+>>>>>>> refs/heads/sensor-ethanol

@@ -46,8 +46,8 @@ eeprom_test.bin \
 all: eeprom_test.elf secondary-outputs
 
 # Tool invocations
-eeprom_test.elf: $(OBJS) $(USER_OBJS) E:\inzynierkowanie\praca_dyplomowa\eeprom_test\STM32L432KCUX_FLASH.ld
-	arm-none-eabi-gcc -o "eeprom_test.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\inzynierkowanie\praca_dyplomowa\eeprom_test\STM32L432KCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="eeprom_test.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+eeprom_test.elf: $(OBJS) $(USER_OBJS) E:\praca_dyplomowa\praca_dyplomowa\eeprom_test\STM32L432KCUX_FLASH.ld
+	arm-none-eabi-gcc -o "eeprom_test.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\praca_dyplomowa\praca_dyplomowa\eeprom_test\STM32L432KCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="eeprom_test.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

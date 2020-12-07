@@ -32,8 +32,8 @@
 //+++++++++++++++++++++++++++++++++++++++
 //Specify type of sensor here (uncomment the proper line)
 //+++++++++++++++++++++++++++++++++++++++
-#define SENSOR_CARBON_MONOXIDE
-//#define SENSOR_ETHANOL
+//#define SENSOR_CARBON_MONOXIDE
+#define SENSOR_ETHANOL
 //#define SENSOR_NITROGEN_DIOXIDE
 //#define SENSOR_METHANE
 
@@ -79,8 +79,14 @@ struct sensor_info
 #define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	0									//0 when factory-reset (0-65356)
 #define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215)
 #elif defined(SENSOR_ETHANOL)
-
-
+#define SENSOR_ID 								2									//0-255
+#define SENSOR_TYPE								ETHANOL						//enum SENSOR_TYPES
+//this coefficient is usually 1-5 nA/ppm -> so f.e. 2.220 will look like: DEC = 2 , FRAC = 220
+#define CURRENT_PER_PPM_COEFFICIENT_DEC			27									//depends on the sensor, but ususally >1
+#define CURRENT_PER_PPM_COEFFICIENT_FRAC		650									//0-999
+#define THRESHOLD								10								//0-4095 for 12b configured ADC
+#define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	0									//0 when factory-reset (0-65356)
+#define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215)
 #endif
 
 #define STRUCT_SIZE								8
@@ -185,8 +191,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  HAL_Delay(1000);
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -389,6 +395,7 @@ void send_to_eeprom_byte_by_byte(uint16_t where, char* what)
 	char msg[80];
 	for(uint16_t i = 0; i<strlen(what); ++i)
 	{
+//		HAL_UART_Transmit(&huart2, (uint8_t*)"loop_in_sending_byte_by_byte\n", 29, HAL_MAX_DELAY);
 		if(HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDRESS, where+i, 1, (uint8_t*)(&(what[i])), sizeof(what[i]), HAL_MAX_DELAY)!=HAL_OK)
 		{
 			sprintf(msg,"WRITE OPERATION FAILED at %d index byte in %s.\r\n", i, what);
@@ -402,11 +409,14 @@ void send_to_eeprom_begin_and_end_markers()
 {
 	char begin = EEPROM_DATA_START, end = EEPROM_DATA_END;
 	char msg[80];
+	HAL_UART_Transmit(&huart2, (uint8_t*)"markers start\n\r", 15, 10);
 	if(HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDRESS, EEPROM_DATA_START_ADDR, 1, (uint8_t*)&begin, sizeof(begin), HAL_MAX_DELAY)!=HAL_OK)
 	{
 		sprintf(msg,"WRITE OPERATION FAILED at start eeprom data");
 		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);
 	}
+
+	HAL_UART_Transmit(&huart2, (uint8_t*)"markers second\n\r", 16, 10);
 	HAL_Delay(1000);
 
 	if(HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDRESS, EEPROM_DATA_END_ADDR, 1, (uint8_t*)&end, sizeof(end), HAL_MAX_DELAY)!=HAL_OK)
@@ -414,6 +424,8 @@ void send_to_eeprom_begin_and_end_markers()
 		sprintf(msg,"WRITE OPERATION FAILED at end eeprom data");
 		HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg), 10);
 	}
+
+	HAL_UART_Transmit(&huart2, (uint8_t*)"markers end\n\r", 13, 10);
 	HAL_Delay(1000);
 }
 
@@ -508,7 +520,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+	HAL_UART_Transmit(&huart2, "yes, this is error", 18, HAL_MAX_DELAY);
   /* USER CODE END Error_Handler_Debug */
 }
 

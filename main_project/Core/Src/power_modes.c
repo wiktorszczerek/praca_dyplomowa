@@ -50,7 +50,7 @@ void power_mode_stop(RTC_HandleTypeDef* hrtc)
 }
 
 
-void power_mode_sleep(RTC_HandleTypeDef* hrtc)
+void power_mode_sleep(RTC_HandleTypeDef* hrtc, uint16_t timer)
 {
 	/* Set all GPIO in analog state to reduce power consumption */
 	GPIO_AnalogState_Config();
@@ -64,7 +64,8 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
 
 	/* Set timer for 5s */
-	HAL_RTCEx_SetWakeUpTimer_IT(hrtc, 0x2710, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+	if(timer)
+		HAL_RTCEx_SetWakeUpTimer_IT(hrtc, timer, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
 
 	/* Suspend Tick increment to prevent wakeup by Systick interrupt.         */
 	/* Otherwise the Systick interrupt will wake up the device within 1ms     */
@@ -83,7 +84,8 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc)
 	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
 	HAL_ResumeTick();
-	HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
+	if(timer)
+		HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
 }
 
 

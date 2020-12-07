@@ -27,6 +27,7 @@
 #include "eeprom.h"
 #include "power_modes.h"
 #include "sim808.h"
+#include "sensors.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,8 +44,8 @@
 #define NUM_OF_MEASUREMENTS 		2
 #define FILTER_BUFFER_SIZE			1000
 #define MAX_ADC_VALUE				4095
-#define RTC_TIME_INTERVAL 			5 //seconds
 
+//debug features - logging, raw measurements...
 #define DEBUG_MODE
 /* USER CODE END PM */
 
@@ -63,6 +64,7 @@ uint16_t filter_buffer_sensor[FILTER_BUFFER_SIZE];
 uint16_t filter_buffer_battery[FILTER_BUFFER_SIZE];
 uint16_t filter_counter = 0;
 uint8_t filter_done = 0;
+uint8_t button_pressed = 0;
 
 uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
@@ -91,6 +93,7 @@ void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
 void reinitializePeriphs();
 void single_measurement(uint16_t delay_after_measurement);
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -148,39 +151,41 @@ int main(void)
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 #endif
+
+  int loop_counter = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-    {
-  	  if(last_error == OK)
-  	  {
-  		  if(sd.sensor_type == ETHANOL) {
-  			  if(!loop_counter) {
-  				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
-  				  button_pressed = 0;
-  				  reinitializePeriphs();
-  			  }
-  			  if(loop_counter != ETHANOL_LOOPS)
-  				  loop_counter++;
-  			  else
-  				  loop_counter = 0;
-  			  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
-  		  }
-  		  else {
-  			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
-  			  reinitializePeriphs();
-  		  }
-  	  }
-  	  else
-  	  {
-  		  signal_error(last_error);
-  		  while(1)
-  		  {
-  			  HAL_Delay(1000);
-  		  }
-  	  }
+  {
+	  if(last_error == OK)
+	  {
+		  if(sd.sensor_type == ETHANOL) {
+			  if(!loop_counter) {
+				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+				  button_pressed = 0;
+				  reinitializePeriphs();
+			  }
+			  if(loop_counter != ETHANOL_LOOPS)
+				  loop_counter++;
+			  else
+				  loop_counter = 0;
+			  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
+		  }
+		  else {
+			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
+			  reinitializePeriphs();
+		  }
+	  }
+	  else
+	  {
+		  signal_error(last_error);
+		  while(1)
+		  {
+			  HAL_Delay(1000);
+		  }
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -447,10 +452,6 @@ static void MX_RTC_Init(void)
   }
   /** Enable the WakeUp
   */
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -569,14 +570,24 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4;
+
+  /*Configure GPIO pins : PB0 PB1 PB4 PB5 PB6
+                           PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
+                          |GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD3_Pin SIM808_PWR_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin|SIM808_PWR_Pin;
+  GPIO_InitStruct.Pin = LD3_Pin|SIM808_PWR_Pin|BUTTON_Pin;
+
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BUTTON_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LD3_Pin */
+  GPIO_InitStruct.Pin = LD3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -588,6 +599,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
@@ -595,6 +610,7 @@ void reinitializePeriphs()
 {
 	SystemClock_Config();
 	MX_GPIO_Init();
+	MX_USART2_UART_Init();
 }
 
 
@@ -615,14 +631,15 @@ void GPIO_AnalogState_Config()
 	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Pin = GPIO_PIN_All;
 
-//	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	GPIO_InitStruct.Pin = GPIO_PIN_All & ~(GPIO_PIN_13 | GPIO_PIN_14);
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	GPIO_InitStruct.Pin = GPIO_PIN_All & ~(BUTTON_Pin);
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 	HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
-//	__HAL_RCC_GPIOA_CLK_DISABLE();
+	__HAL_RCC_GPIOA_CLK_DISABLE();
 	__HAL_RCC_GPIOB_CLK_DISABLE();
 	__HAL_RCC_GPIOC_CLK_DISABLE();
 	__HAL_RCC_GPIOH_CLK_DISABLE();
@@ -756,6 +773,13 @@ void single_measurement(uint16_t delay_after_measurement) {
 //	MX_GPIO_Init();
 //}
 
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if(GPIO_Pin == BUTTON_Pin) {
+		button_pressed = 1;
+	}
+}
 
 /* USER CODE END 4 */
 
