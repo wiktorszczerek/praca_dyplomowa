@@ -60,6 +60,8 @@ void SystemClock_Low(void);
 /* Private defines -----------------------------------------------------------*/
 #define LD3_Pin GPIO_PIN_3
 #define LD3_GPIO_Port GPIOB
+#define SIM808_PWR_Pin GPIO_PIN_5
+#define SIM808_PWR_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

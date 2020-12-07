@@ -9,7 +9,8 @@
 #define INC_SHARED_VARIABLES_H_
 
 I2C_HandleTypeDef hi2c1;
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
-
+DMA_HandleTypeDef hdma_usart1_rx;
 
 #endif /* INC_SHARED_VARIABLES_H_ */
