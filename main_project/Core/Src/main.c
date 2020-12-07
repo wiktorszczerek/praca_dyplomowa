@@ -90,7 +90,7 @@ void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
 void reinitializePeriphs();
-
+void single_measurement(uint16_t delay_after_measurement);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -153,42 +153,34 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-  {
-	  if(last_error == OK)
-	  {
-		  char* buffer = (char*)malloc(100*sizeof(char));
-		  power_mode_sleep(&hrtc);
-		  reinitializePeriphs();
-		  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
-		  while(!filter_done){}
-		  HAL_ADC_Stop_DMA(&hadc1);
-		  #ifdef DEBUG_MODE
-			  sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
-			  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-			  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-			  HAL_Delay(1000);
-			  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-		  #else
-			  if((last_error = check_if_threshold_level_exceeded()) != OK)
-			  {
-				  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
-				  last_error = OK; //erasing the error, after it was caught
-			  }
-			  else
-				  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
-			  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		  #endif
-		  free(buffer);
-		  filter_done = 0;
-	  }
-	  else
-	  {
-		  signal_error(last_error);
-		  while(1)
-		  {
-			  HAL_Delay(1000);
-		  }
-	  }
+    {
+  	  if(last_error == OK)
+  	  {
+  		  if(sd.sensor_type == ETHANOL) {
+  			  if(!loop_counter) {
+  				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+  				  button_pressed = 0;
+  				  reinitializePeriphs();
+  			  }
+  			  if(loop_counter != ETHANOL_LOOPS)
+  				  loop_counter++;
+  			  else
+  				  loop_counter = 0;
+  			  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
+  		  }
+  		  else {
+  			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
+  			  reinitializePeriphs();
+  		  }
+  	  }
+  	  else
+  	  {
+  		  signal_error(last_error);
+  		  while(1)
+  		  {
+  			  HAL_Delay(1000);
+  		  }
+  	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -726,6 +718,30 @@ ERRORS check_if_threshold_level_exceeded()
 	else return THRESHOLD_LEVEL_EXCEEDED;
 }
 
+void single_measurement(uint16_t delay_after_measurement) {
+	char* buffer = (char*)malloc(100*sizeof(char));
+	HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
+	while(!filter_done){}
+	HAL_ADC_Stop_DMA(&hadc1);
+	filter_done = 0;
+	#ifdef DEBUG_MODE
+		sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
+		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+	#else
+		if((last_error = check_if_threshold_level_exceeded()) != OK)
+		{
+		  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
+		  last_error = OK; //erasing the error, after it was caught
+		}
+		else
+		  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
+		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+	#endif
+	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+	HAL_Delay(delay_after_measurement);
+	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+	free(buffer);
+}
 /**
   * @brief  Alarm callback
   * @param  hrtc : RTC handle
