@@ -56,6 +56,11 @@ DMA_HandleTypeDef hdma_adc1;
 I2C_HandleTypeDef hi2c1;
 
 RTC_HandleTypeDef hrtc;
+
+UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
+
 /* USER CODE BEGIN PV */
 uint16_t adc_vals[NUM_OF_MEASUREMENTS] = {0};
 uint16_t measured_values[NUM_OF_MEASUREMENTS];  //in mV
@@ -163,9 +168,9 @@ int main(void)
 	  {
 		  if(sd.sensor_type == ETHANOL) {
 			  if(!loop_counter) {
-				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+//				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
 				  button_pressed = 0;
-				  reinitializePeriphs();
+//				  reinitializePeriphs();
 			  }
 			  if(loop_counter != ETHANOL_LOOPS)
 				  loop_counter++;
@@ -452,6 +457,10 @@ static void MX_RTC_Init(void)
   }
   /** Enable the WakeUp
   */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -570,24 +579,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-
-  /*Configure GPIO pins : PB0 PB1 PB4 PB5 PB6
-                           PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7;
+  /*Configure GPIO pins : PB0 PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD3_Pin SIM808_PWR_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin|SIM808_PWR_Pin|BUTTON_Pin;
-
+  /*Configure GPIO pin : BUTTON_Pin */
+  GPIO_InitStruct.Pin = BUTTON_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD3_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin;
+  /*Configure GPIO pins : LD3_Pin SIM808_PWR_Pin */
+  GPIO_InitStruct.Pin = LD3_Pin|SIM808_PWR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -610,7 +615,9 @@ void reinitializePeriphs()
 {
 	SystemClock_Config();
 	MX_GPIO_Init();
+	MX_DMA_Init();
 	MX_USART2_UART_Init();
+	MX_USART1_UART_Init();
 }
 
 
@@ -744,6 +751,14 @@ void single_measurement(uint16_t delay_after_measurement) {
 	#ifdef DEBUG_MODE
 		sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
 		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		free(buffer);
+		sim808_power_on();
+		if((last_error = sim808_establish_baudrate()) != OK)
+			return;
+		if((last_error = sim808_init()) != OK)
+			return;
+		if((last_error = sim808_send_sms("Przekroczono limit!")) != OK)
+			return;
 	#else
 		if((last_error = check_if_threshold_level_exceeded()) != OK)
 		{
@@ -753,11 +768,11 @@ void single_measurement(uint16_t delay_after_measurement) {
 		else
 		  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
 		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
+		free(buffer);
 	#endif
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 	HAL_Delay(delay_after_measurement);
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-	free(buffer);
 }
 /**
   * @brief  Alarm callback
