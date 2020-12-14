@@ -9,6 +9,7 @@
 #define INC_POWER_MODES_H_
 
 #include "includes.h"
+#include "shared_variables.h"
 ERRORS rtc_setup();
 ERRORS rtc_set_alarm_in_seconds(RTC_HandleTypeDef* hrtc, int seconds);
 

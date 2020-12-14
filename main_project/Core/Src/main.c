@@ -58,7 +58,6 @@ I2C_HandleTypeDef hi2c1;
 RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
@@ -69,7 +68,6 @@ uint16_t filter_buffer_sensor[FILTER_BUFFER_SIZE];
 uint16_t filter_buffer_battery[FILTER_BUFFER_SIZE];
 uint16_t filter_counter = 0;
 uint8_t filter_done = 0;
-uint8_t button_pressed = 0;
 
 uint32_t holder[NUM_OF_MEASUREMENTS] = {0};
 
@@ -86,18 +84,20 @@ uint32_t holder_debug[NUM_OF_MEASUREMENTS] = {0};
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
+
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
 ERRORS check_if_threshold_level_exceeded();
 void reinitializePeriphs();
 void single_measurement(uint16_t delay_after_measurement);
+void send_sms(char* text);
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
@@ -134,7 +134,6 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
   MX_RTC_Init();
@@ -152,11 +151,10 @@ int main(void)
   #endif
 
 
-
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 #endif
-
+  uint16_t max_value1 = 0;
   int loop_counter = 0;
   /* USER CODE END 2 */
 
@@ -168,15 +166,23 @@ int main(void)
 	  {
 		  if(sd.sensor_type == ETHANOL) {
 			  if(!loop_counter) {
-//				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
-				  button_pressed = 0;
-//				  reinitializePeriphs();
+				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
+				  reinitializePeriphs();
 			  }
 			  if(loop_counter != ETHANOL_LOOPS)
+			  {
 				  loop_counter++;
+				  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
+				  max_value1=(measured_values[0]>max_value1)?measured_values[0]:max_value1;
+			  }
 			  else
+			  {
 				  loop_counter = 0;
-			  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
+				  char* buffer = (char*)malloc(140);
+				  sprintf(buffer,"Wynik[mV]: measured[0] %u", max_value1);
+				  send_sms(buffer);
+				  button_pressed = 0;
+			  }
 		  }
 		  else {
 			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
@@ -245,10 +251,8 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART1
-                              |RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_ADC;
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_ADC;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
-  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
@@ -342,6 +346,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_11;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  sConfig.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -457,10 +462,10 @@ static void MX_RTC_Init(void)
   }
   /** Enable the WakeUp
   */
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-  {
-    Error_Handler();
-  }
+//  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
@@ -499,41 +504,6 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -579,6 +549,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PA2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PB0 PB4 */
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
@@ -590,6 +568,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BUTTON_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF3_USART2;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD3_Pin SIM808_PWR_Pin */
   GPIO_InitStruct.Pin = LD3_Pin|SIM808_PWR_Pin;
@@ -605,7 +591,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
 }
@@ -615,9 +601,13 @@ void reinitializePeriphs()
 {
 	SystemClock_Config();
 	MX_GPIO_Init();
+	MX_ADC1_Init();
+	MX_I2C1_Init();
 	MX_DMA_Init();
-	MX_USART2_UART_Init();
+	HAL_UART_MspInit(&huart1);
 	MX_USART1_UART_Init();
+//	HAL_UART_MspInit(&huart2);
+//	MX_USART2_UART_Init();
 }
 
 
@@ -660,7 +650,7 @@ void SystemClock_Low(void)
   /* MSI is enabled after System reset, update MSI to 24Mhz (RCC_MSIRANGE_9) */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
   if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -701,7 +691,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 				}
 				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
 				{
-					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
+					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3000)/MAX_ADC_VALUE;
 					measured_values[i] = (uint16_t)measured_values_double[i];
 					#ifdef DEBUG_MODE
 					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
@@ -742,37 +732,30 @@ ERRORS check_if_threshold_level_exceeded()
 	else return THRESHOLD_LEVEL_EXCEEDED;
 }
 
+
+
 void single_measurement(uint16_t delay_after_measurement) {
-	char* buffer = (char*)malloc(100*sizeof(char));
+
 	HAL_ADC_Start_DMA(&hadc1,(uint32_t*)adc_vals, 2);
 	while(!filter_done){}
 	HAL_ADC_Stop_DMA(&hadc1);
 	filter_done = 0;
-	#ifdef DEBUG_MODE
-		sprintf(buffer,"\rControl group (bare 12b ADC readings, averaged): measured[0] = %lu /// measured[1] = %lu",measured_values[0],measured_values[1]);
-		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		free(buffer);
-		sim808_power_on();
-		if((last_error = sim808_establish_baudrate()) != OK)
-			return;
-		if((last_error = sim808_init()) != OK)
-			return;
-		if((last_error = sim808_send_sms("Przekroczono limit!")) != OK)
-			return;
-	#else
-		if((last_error = check_if_threshold_level_exceeded()) != OK)
-		{
-		  sprintf(buffer,"\bThreshold level EXCEEDED!\r");
-		  last_error = OK; //erasing the error, after it was caught
-		}
-		else
-		  sprintf(buffer,"\bMeasurement result is normal (sub-threshold level).\r");
-		HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), 10);
-		free(buffer);
-	#endif
+//	last_error=check_if_threshold_level_exceeded();
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 	HAL_Delay(delay_after_measurement);
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+}
+
+void send_sms(char* text)
+{
+	sim808_power_on();
+	if((last_error = sim808_establish_baudrate()) != OK)
+		return;
+	if((last_error = sim808_init()) != OK)
+		return;
+	if((last_error = sim808_send_sms(text)) != OK)
+		return;
+	sim808_power_off();
 }
 /**
   * @brief  Alarm callback

@@ -63,7 +63,7 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc, uint16_t timer)
 	/* Configure the main internal regulator output voltage */
 	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
 
-	/* Set timer for 5s */
+	/* Set timer for timer s */
 	if(timer)
 		HAL_RTCEx_SetWakeUpTimer_IT(hrtc, timer, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
 
@@ -81,7 +81,15 @@ void power_mode_sleep(RTC_HandleTypeDef* hrtc, uint16_t timer)
 	RCC->APB2SMENR = 0x0;
 
 	/* Enter SLEEP Mode, Main regulator is ON */
-	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+	if(!timer)
+	{
+		while(!button_pressed)
+		{
+			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+		}
+	}
+	else
+		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 
 	HAL_ResumeTick();
 	if(timer)

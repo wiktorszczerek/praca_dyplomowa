@@ -27,6 +27,7 @@ void sim808_power_off()
 	HAL_GPIO_WritePin(SIM808_PWR_GPIO_Port, SIM808_PWR_Pin, GPIO_PIN_SET);
 	HAL_Delay(2000);
 	HAL_GPIO_WritePin(SIM808_PWR_GPIO_Port, SIM808_PWR_Pin, GPIO_PIN_RESET);
+	HAL_Delay(1000);
 }
 
 void clear_uart_buffer()
@@ -45,7 +46,7 @@ ERRORS sim808_send_and_check_response(char* cmd, uint8_t response_size)
 	__HAL_UART_FLUSH_DRREGISTER(&huart1);
 	HAL_UART_Receive_DMA(&huart1, recv, response_size);
 	while(!response_received){};
-	HAL_UART_Transmit(&huart2, recv, UART_BUFFER_SIZE, 1000);
+//	HAL_UART_Transmit(&huart2, recv, UART_BUFFER_SIZE, 1000);
 	if(!strcmp((char*)cmd, "\r\nERROR\r\n"))
 	{
 		return SIM808_ERROR;
