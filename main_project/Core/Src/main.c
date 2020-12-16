@@ -93,7 +93,7 @@ static void MX_NVIC_Init(void);
 
 void signal_with_diodes_ms(int num_of_loops, uint32_t ms);
 void signal_error(ERRORS err);
-ERRORS check_if_threshold_level_exceeded();
+ERRORS check_if_threshold_level_exceeded(uint16_t value);
 void reinitializePeriphs();
 void single_measurement(uint16_t delay_after_measurement);
 void send_sms(char* text);
@@ -120,7 +120,6 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
   /* USER CODE BEGIN Init */
   /* USER CODE END Init */
 
@@ -142,6 +141,8 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
+  button_pressed = 0;
+
 #ifdef DEBUG_MODE
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 #endif
@@ -155,6 +156,11 @@ int main(void)
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 #endif
   uint16_t max_value1 = 0;
+  uint16_t carbon_monoxide_measurements[CARBON_MONOXIDE_TWO_MINUTES];
+  uint16_t carbon_monoxide_measurements_buffer[CARBON_MONOXIDE_TWO_MINUTES];
+  uint8_t carbon_monoxide_triggered = 0;
+  double avg = 0;
+  uint8_t carbon_monoxide_buffer_full = 0;
   int loop_counter = 0;
   /* USER CODE END 2 */
 
@@ -179,14 +185,56 @@ int main(void)
 			  {
 				  loop_counter = 0;
 				  char* buffer = (char*)malloc(140);
-				  sprintf(buffer,"Wynik[mV]: measured[0] %u", max_value1);
+				  sprintf(buffer,"Wynik[ADC]: measured[0] %u", max_value1);
 				  send_sms(buffer);
 				  button_pressed = 0;
 			  }
 		  }
 		  else {
+//			  if(loop_counter == CARBON_MONOXIDE_THREE_MINUTES)
+//			  {
+//				  uint32_t avg;
+//				  for(int i=0;i<CARBON_MONOXIDE_THREE_MINUTES;++i)
+//				  {
+//					  avg+=carbon_monoxide_measurements[i];
+//				  }
+//				  avg /= CARBON_MONOXIDE_THREE_MINUTES;
+////				  last_error = check_if_threshold_level_exceeded(avg);
+//				  char* buffer = (char*)malloc(140);
+//				  sprintf(buffer,"Wynik[ADC]: measured[0] %u", avg);
+//				  send_sms(buffer);
+//			  }
+//			  else
+//			  {
+//				  carbon_monoxide_measurements[loop_counter] = measured_values[0];
+//				  loop_counter++;
+//			  }
 			  power_mode_sleep(&hrtc, CARBON_MONOXIDE_SLEEP_TIME);
 			  reinitializePeriphs();
+			  single_measurement(STANDARD_DELAY_AFTER_MEASUREMENT);
+			  if(carbon_monoxide_buffer_full)
+			  {
+				  for(uint8_t i=1;i<CARBON_MONOXIDE_TWO_MINUTES; ++i)
+				  {
+					  carbon_monoxide_measurements[i-1]=carbon_monoxide_measurements[i];
+					  avg+=carbon_monoxide_measurements[i];
+				  }
+				  carbon_monoxide_measurements[CARBON_MONOXIDE_TWO_MINUTES-1] = measured_values[0];
+				  avg+= carbon_monoxide_measurements[CARBON_MONOXIDE_TWO_MINUTES-1];
+				  avg /= CARBON_MONOXIDE_TWO_MINUTES;
+				  if(avg >= 956)
+				  {
+					  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+				  }
+				  else HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+			  }
+			  else
+			  {
+				  carbon_monoxide_measurements[loop_counter] = measured_values[0];
+				  loop_counter++;
+				  if(loop_counter == CARBON_MONOXIDE_TWO_MINUTES)
+					  carbon_monoxide_buffer_full=1;
+			  }
 		  }
 	  }
 	  else
@@ -691,11 +739,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 				}
 				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
 				{
-					measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3000)/MAX_ADC_VALUE;
-					measured_values[i] = (uint16_t)measured_values_double[i];
-					#ifdef DEBUG_MODE
-					holder_debug[i] = holder[i]/FILTER_BUFFER_SIZE;
-					#endif
+					//measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3000)/MAX_ADC_VALUE;
+					//measured_values[i] = (uint16_t)measured_values_double[i];
+					measured_values[i] = holder[i]/FILTER_BUFFER_SIZE;
 					holder[i] = 0;
 				}
 				filter_done = 1;
@@ -726,9 +772,9 @@ void signal_error(ERRORS err)
 	signal_with_diodes_ms(err, 1000);
 }
 
-ERRORS check_if_threshold_level_exceeded()
+ERRORS check_if_threshold_level_exceeded(uint16_t value)
 {
-	if(measured_values[0] > sd.threshold) return OK;
+	if(value < sd.threshold) return OK;
 	else return THRESHOLD_LEVEL_EXCEEDED;
 }
 
@@ -740,7 +786,6 @@ void single_measurement(uint16_t delay_after_measurement) {
 	while(!filter_done){}
 	HAL_ADC_Stop_DMA(&hadc1);
 	filter_done = 0;
-//	last_error=check_if_threshold_level_exceeded();
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 	HAL_Delay(delay_after_measurement);
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);

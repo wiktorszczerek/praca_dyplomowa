@@ -9,4 +9,4 @@ main.c:394:6:send_to_eeprom_byte_by_byte	128	static
 main.c:409:6:send_to_eeprom_begin_and_end_markers	120	static
 main.c:433:6:write_sensor_info_to_eeprom	104	static
 main.c:502:6:zero_eeprom_useful_mem	216	static
-main.c:520:6:Error_Handler	8	static
+main.c:520:6:Error_Handler	4	static

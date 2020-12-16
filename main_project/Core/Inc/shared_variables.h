@@ -14,6 +14,6 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 
-uint8_t button_pressed = 0;
+uint8_t button_pressed;
 
 #endif /* INC_SHARED_VARIABLES_H_ */

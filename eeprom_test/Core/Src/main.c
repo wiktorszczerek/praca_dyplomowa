@@ -32,8 +32,8 @@
 //+++++++++++++++++++++++++++++++++++++++
 //Specify type of sensor here (uncomment the proper line)
 //+++++++++++++++++++++++++++++++++++++++
-//#define SENSOR_CARBON_MONOXIDE
-#define SENSOR_ETHANOL
+#define SENSOR_CARBON_MONOXIDE
+//#define SENSOR_ETHANOL
 //#define SENSOR_NITROGEN_DIOXIDE
 //#define SENSOR_METHANE
 
@@ -65,7 +65,7 @@ struct sensor_info
 //+++++++++++++++++++++++++++++++++++++++
 //Specify version number!
 //+++++++++++++++++++++++++++++++++++++++
-#define VERSION_NUM								1									//0-255
+#define VERSION_NUM								2									//0-255
 //+++++++++++++++++++++++++++++++++++++++
 //Specify sensor parameters for wanted type!
 //+++++++++++++++++++++++++++++++++++++++
@@ -75,7 +75,7 @@ struct sensor_info
 //this coefficient is usually 1-5 nA/ppm -> so f.e. 2.220 will look like: DEC = 2 , FRAC = 220
 #define CURRENT_PER_PPM_COEFFICIENT_DEC			1									//depends on the sensor, but ususally >1
 #define CURRENT_PER_PPM_COEFFICIENT_FRAC		592									//0-999
-#define THRESHOLD								43								//0-4095 for 12b configured ADC
+#define THRESHOLD								1434								//0-4095 for 12b configured ADC -> 1434 = 1050mV = 300ppm
 #define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	0									//0 when factory-reset (0-65356)
 #define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215)
 #elif defined(SENSOR_ETHANOL)
@@ -521,7 +521,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-	HAL_UART_Transmit(&huart2, "yes, this is error", 18, HAL_MAX_DELAY);
+	//HAL_UART_Transmit(&huart2, "yes, this is error", 18, HAL_MAX_DELAY);
   /* USER CODE END Error_Handler_Debug */
 }
 
