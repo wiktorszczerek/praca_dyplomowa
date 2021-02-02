@@ -15,7 +15,7 @@
 #define INFINITE_SLEEP_TIME					0
 
 //ETANOL - loops and delay between measurements.
-#define ETHANOL_LOOPS						150 //150 * 200ms = 30000ms = 30s. - should be enough
+#define ETHANOL_LOOPS						100 //150 * 200ms = 30000ms = 30s. - should be enough -> far too much...
 #define ETHANOL_DELAY_BETWEEN_MEASUREMENTS	200
 #define STANDARD_DELAY_AFTER_MEASUREMENT	100
 

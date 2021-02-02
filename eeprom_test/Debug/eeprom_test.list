@@ -39,11 +39,11 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING
  17 .debug_line   00009c7b  00000000  00000000  00051400  2**0
                   CONTENTS, READONLY, DEBUGGING
- 18 .debug_str    000c22a6  00000000  00000000  0005b07b  2**0
+ 18 .debug_str    000c229d  00000000  00000000  0005b07b  2**0
                   CONTENTS, READONLY, DEBUGGING
- 19 .comment      0000007b  00000000  00000000  0011d321  2**0
+ 19 .comment      0000007b  00000000  00000000  0011d318  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  000034c8  00000000  00000000  0011d39c  2**2
+ 20 .debug_frame  000034c8  00000000  00000000  0011d394  2**2
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -994,10 +994,10 @@ void create_sensor_info(struct sensor_info* si)
  80008ce:	3303      	adds	r3, #3
  80008d0:	461a      	mov	r2, r3
  80008d2:	2102      	movs	r1, #2
- 80008d4:	2001      	movs	r0, #1
+ 80008d4:	2002      	movs	r0, #2
  80008d6:	f7ff ffd3 	bl	8000880 <format_to_hex>
 	SENSOR_TYPES states_holder = SENSOR_TYPE;
- 80008da:	2300      	movs	r3, #0
+ 80008da:	2301      	movs	r3, #1
  80008dc:	73fb      	strb	r3, [r7, #15]
 	format_to_hex((uint8_t)states_holder, ONE_HEX_BYTE, si->sensor_type);
  80008de:	7bfb      	ldrb	r3, [r7, #15]
@@ -1012,41 +1012,42 @@ void create_sensor_info(struct sensor_info* si)
  80008f0:	3309      	adds	r3, #9
  80008f2:	461a      	mov	r2, r3
  80008f4:	2102      	movs	r1, #2
- 80008f6:	2001      	movs	r0, #1
+ 80008f6:	201b      	movs	r0, #27
  80008f8:	f7ff ffc2 	bl	8000880 <format_to_hex>
 	format_to_hex(CURRENT_PER_PPM_COEFFICIENT_FRAC, ONE_HEX_BYTE+1,si->current_per_ppm_coefficient_frac);
  80008fc:	687b      	ldr	r3, [r7, #4]
  80008fe:	330c      	adds	r3, #12
  8000900:	461a      	mov	r2, r3
  8000902:	2103      	movs	r1, #3
- 8000904:	f44f 7014 	mov.w	r0, #592	; 0x250
+ 8000904:	f240 208a 	movw	r0, #650	; 0x28a
  8000908:	f7ff ffba 	bl	8000880 <format_to_hex>
 	format_to_hex(THRESHOLD, ONE_HEX_BYTE+1,si->threshold);
  800090c:	687b      	ldr	r3, [r7, #4]
  800090e:	3310      	adds	r3, #16
  8000910:	461a      	mov	r2, r3
  8000912:	2103      	movs	r1, #3
- 8000914:	f240 509a 	movw	r0, #1434	; 0x59a
- 8000918:	f7ff ffb2 	bl	8000880 <format_to_hex>
+ 8000914:	200a      	movs	r0, #10
+ 8000916:	f7ff ffb3 	bl	8000880 <format_to_hex>
 	format_to_hex(DEVICE_TURNED_ON_WITH_SENSOR_COUNTER, 2*ONE_HEX_BYTE,si->device_turned_on_with_sensor_counter);
- 800091c:	687b      	ldr	r3, [r7, #4]
- 800091e:	3314      	adds	r3, #20
- 8000920:	461a      	mov	r2, r3
- 8000922:	2104      	movs	r1, #4
- 8000924:	2000      	movs	r0, #0
- 8000926:	f7ff ffab 	bl	8000880 <format_to_hex>
+ 800091a:	687b      	ldr	r3, [r7, #4]
+ 800091c:	3314      	adds	r3, #20
+ 800091e:	461a      	mov	r2, r3
+ 8000920:	2104      	movs	r1, #4
+ 8000922:	2000      	movs	r0, #0
+ 8000924:	f7ff ffac 	bl	8000880 <format_to_hex>
 	format_to_hex(SENSOR_FIRED_COUNTER, 3*ONE_HEX_BYTE,si->sensor_fired_counter);
- 800092a:	687b      	ldr	r3, [r7, #4]
- 800092c:	3319      	adds	r3, #25
- 800092e:	461a      	mov	r2, r3
- 8000930:	2106      	movs	r1, #6
- 8000932:	2000      	movs	r0, #0
- 8000934:	f7ff ffa4 	bl	8000880 <format_to_hex>
+ 8000928:	687b      	ldr	r3, [r7, #4]
+ 800092a:	3319      	adds	r3, #25
+ 800092c:	461a      	mov	r2, r3
+ 800092e:	2106      	movs	r1, #6
+ 8000930:	2000      	movs	r0, #0
+ 8000932:	f7ff ffa5 	bl	8000880 <format_to_hex>
 }
- 8000938:	bf00      	nop
- 800093a:	3710      	adds	r7, #16
- 800093c:	46bd      	mov	sp, r7
- 800093e:	bd80      	pop	{r7, pc}
+ 8000936:	bf00      	nop
+ 8000938:	3710      	adds	r7, #16
+ 800093a:	46bd      	mov	sp, r7
+ 800093c:	bd80      	pop	{r7, pc}
+	...
 
 08000940 <send_to_eeprom_byte_by_byte>:
 

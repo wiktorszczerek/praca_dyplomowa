@@ -45,6 +45,9 @@
 #define FILTER_BUFFER_SIZE			1000
 #define MAX_ADC_VALUE				4095
 
+//tests
+#define CARBON_MONOXIDE_THIRD_TIER	1434
+
 //debug features - logging, raw measurements...
 #define DEBUG_MODE
 /* USER CODE END PM */
@@ -120,6 +123,7 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
   /* USER CODE BEGIN Init */
   /* USER CODE END Init */
 
@@ -174,19 +178,26 @@ int main(void)
 			  if(!loop_counter) {
 				  power_mode_sleep(&hrtc, INFINITE_SLEEP_TIME); //or just sleep until interrupt comes.
 				  reinitializePeriphs();
+				  avg = 0;
 			  }
 			  if(loop_counter != ETHANOL_LOOPS)
 			  {
 				  loop_counter++;
 				  single_measurement(ETHANOL_DELAY_BETWEEN_MEASUREMENTS);
-				  max_value1=(measured_values[0]>max_value1)?measured_values[0]:max_value1;
+				  //max_value1=(measured_values[0]>max_value1)?measured_values[0]:max_value1;
+				  avg+=measured_values[0];
 			  }
 			  else
 			  {
+				  avg/=ETHANOL_LOOPS;
 				  loop_counter = 0;
 				  char* buffer = (char*)malloc(140);
-				  sprintf(buffer,"Wynik[ADC]: measured[0] %u", max_value1);
-				  send_sms(buffer);
+				  double holder = (avg-200)/27.65;
+				  double brac = (holder/260);
+				  double bac = brac*2.1;
+				  sprintf(buffer,"Wynik BrAC: %.2f. Wynik BAC: %.2f", brac, bac);
+//				  sprintf(buffer,"Wynik[ADC]: measured[0] %u", max_value1);
+//				  send_sms(buffer);
 				  button_pressed = 0;
 			  }
 		  }
@@ -222,7 +233,7 @@ int main(void)
 				  carbon_monoxide_measurements[CARBON_MONOXIDE_TWO_MINUTES-1] = measured_values[0];
 				  avg+= carbon_monoxide_measurements[CARBON_MONOXIDE_TWO_MINUTES-1];
 				  avg /= CARBON_MONOXIDE_TWO_MINUTES;
-				  if(avg >= 956)
+				  if(avg >= CARBON_MONOXIDE_THIRD_TIER)
 				  {
 					  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 				  }
@@ -724,7 +735,6 @@ void SystemClock_Low(void)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-//		measured_values[i] = (adc_vals[i]*3300)/4095;
 		if(!filter_done)
 		{
 			filter_buffer_sensor[filter_counter] = adc_vals[0];
@@ -739,9 +749,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 				}
 				for(int i=0;i<NUM_OF_MEASUREMENTS;++i)
 				{
-					//measured_values_double[i] = ((holder[i]/FILTER_BUFFER_SIZE)*3000)/MAX_ADC_VALUE;
-					//measured_values[i] = (uint16_t)measured_values_double[i];
-					measured_values[i] = holder[i]/FILTER_BUFFER_SIZE;
+					measured_values_double[i] = 54 + ((holder[i]/FILTER_BUFFER_SIZE)*3300)/MAX_ADC_VALUE;
+					measured_values[i] = (uint16_t)measured_values_double[i];
 					holder[i] = 0;
 				}
 				filter_done = 1;
@@ -795,11 +804,20 @@ void send_sms(char* text)
 {
 	sim808_power_on();
 	if((last_error = sim808_establish_baudrate()) != OK)
+	{
+		sim808_power_off();
 		return;
+	}
 	if((last_error = sim808_init()) != OK)
+	{
+		sim808_power_off();
 		return;
+	}
 	if((last_error = sim808_send_sms(text)) != OK)
+	{
+		sim808_power_off();
 		return;
+	}
 	sim808_power_off();
 }
 /**

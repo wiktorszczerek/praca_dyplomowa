@@ -77,7 +77,12 @@ ERRORS sim808_send_and_check_response(char* cmd, uint8_t response_size)
 
 ERRORS sim808_establish_baudrate()
 {
-  ERRORS local_error = sim808_send_and_check_response("AT\r", 6);
+  ERRORS local_error;
+  for(int i=0;i<10;++i)
+  {
+	  local_error = sim808_send_and_check_response("AT\r", 6);
+	  HAL_Delay(1000);
+  }
   if(local_error == SIM808_ECHO_ENABLED)
 	  local_error=sim808_send_and_check_response("ATE0\r", 10);
 

@@ -32,8 +32,8 @@
 //+++++++++++++++++++++++++++++++++++++++
 //Specify type of sensor here (uncomment the proper line)
 //+++++++++++++++++++++++++++++++++++++++
-#define SENSOR_CARBON_MONOXIDE
-//#define SENSOR_ETHANOL
+//#define SENSOR_CARBON_MONOXIDE
+#define SENSOR_ETHANOL
 //#define SENSOR_NITROGEN_DIOXIDE
 //#define SENSOR_METHANE
 
@@ -86,7 +86,7 @@ struct sensor_info
 #define CURRENT_PER_PPM_COEFFICIENT_FRAC		650									//0-999
 #define THRESHOLD								10								//0-4095 for 12b configured ADC
 #define DEVICE_TURNED_ON_WITH_SENSOR_COUNTER	0									//0 when factory-reset (0-65356)
-#define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215)
+#define SENSOR_FIRED_COUNTER					0								//0 when factory-reset (0-16 777 215) TODO: ONLY 4B required - EEPROMS are not that rewriteable :V
 #endif
 
 #define STRUCT_SIZE								8
